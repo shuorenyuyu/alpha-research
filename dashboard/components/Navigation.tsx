@@ -9,6 +9,8 @@ export default function Navigation() {
   const navItems = [
     { name: "Dashboard", path: "/" },
     { name: "Research", path: "/research" },
+    { name: "WeChat", path: "/wechat" },
+    { name: "Stocks", path: "/stocks" },
   ];
 
   return (

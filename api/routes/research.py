@@ -3,6 +3,7 @@ Research papers API routes
 Fetches data from research-tracker database
 """
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import HTMLResponse
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -11,13 +12,21 @@ import os
 
 router = APIRouter()
 
-# Path to research-tracker database
+# Path to research-tracker database and articles
 DB_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
     "..",
     "research-tracker",
     "data",
     "papers.db"
+)
+
+WECHAT_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "..",
+    "research-tracker",
+    "data",
+    "wechat_articles"
 )
 
 class Paper(BaseModel):
@@ -133,3 +142,38 @@ async def get_stats():
         
     except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@router.get("/wechat/list")
+async def list_wechat_articles():
+    """List available WeChat articles"""
+    try:
+        if not os.path.exists(WECHAT_PATH):
+            return {"articles": []}
+        
+        articles = [f for f in os.listdir(WECHAT_PATH) if f.endswith('.html')]
+        articles.sort(reverse=True)  # Latest first
+        return {"articles": articles}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing articles: {str(e)}")
+
+@router.get("/wechat/{filename}", response_class=HTMLResponse)
+async def get_wechat_article(filename: str):
+    """Get WeChat article HTML content"""
+    try:
+        # Security: only allow .html files and prevent path traversal
+        if not filename.endswith('.html') or '/' in filename or '\\' in filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        
+        filepath = os.path.join(WECHAT_PATH, filename)
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail="Article not found")
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return HTMLResponse(content=content)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading article: {str(e)}")

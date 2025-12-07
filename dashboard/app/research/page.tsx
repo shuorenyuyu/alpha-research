@@ -21,31 +21,43 @@ export default function ResearchPage() {
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
 
   useEffect(() => {
-    // Mock data - replace with API call later
-    const mockPaper: Paper = {
-      id: 1,
-      title: "Revised Surgical CAse REport (SCARE) guideline: An update for the age of Artificial Intelligence",
-      authors: "Ahmed Kerwan, A. Al-Jabir, et al.",
-      year: 2025,
-      venue: "Premier Journal of Science",
-      citation_count: 669,
-      summary_zh: "SCARE 2025指南更新引入AI相关报告标准，提高手术案例报告的透明度和可重复性...",
-      investment_insights: "医疗科技公司将受益于这种标准化的指南...",
-      url: "https://www.semanticscholar.org/paper/example",
-      fetched_at: "2025-12-07",
+    const fetchPapers = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/research/papers?limit=50');
+        if (response.ok) {
+          const data = await response.json();
+          setPapers(data);
+        } else {
+          console.error('Failed to fetch papers');
+        }
+      } catch (error) {
+        console.error('Error fetching papers:', error);
+      } finally {
+        setLoading(false);
+      }
     };
-    
-    setTimeout(() => {
-      setPapers([mockPaper]);
-      setLoading(false);
-    }, 500);
+
+    fetchPapers();
   }, []);
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-20 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading research papers...</p>
+      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-400">Loading research papers...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!loading && papers.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-2xl text-gray-400">No research papers found</p>
+          <p className="text-gray-500 mt-2">Start the backend API to load papers from research-tracker</p>
+        </div>
       </div>
     );
   }
@@ -125,20 +137,37 @@ export default function ResearchPage() {
             </div>
 
             <div className="border-t pt-6">
-              <h3 className="text-xl font-semibold mb-3">中文摘要</h3>
-              <div className="prose max-w-none">
-                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                  {selectedPaper.summary_zh}
-                </p>
+              <h3 className="text-xl font-semibold mb-4 text-gray-900">📄 中文摘要</h3>
+              <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-strong:text-gray-900">
+                <div 
+                  className="whitespace-pre-wrap leading-relaxed"
+                  dangerouslySetInnerHTML={{
+                    __html: selectedPaper.summary_zh
+                      ? selectedPaper.summary_zh
+                          .replace(/##\s+(.+)/g, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
+                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\n\n/g, '<br/><br/>')
+                      : '暂无摘要'
+                  }}
+                />
               </div>
             </div>
 
             <div className="border-t mt-6 pt-6">
-              <h3 className="text-xl font-semibold mb-3">投资洞察</h3>
-              <div className="prose max-w-none">
-                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                  {selectedPaper.investment_insights}
-                </p>
+              <h3 className="text-xl font-semibold mb-4 text-gray-900">💡 投资洞察</h3>
+              <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-strong:text-gray-900">
+                <div 
+                  className="whitespace-pre-wrap leading-relaxed"
+                  dangerouslySetInnerHTML={{
+                    __html: selectedPaper.investment_insights
+                      ? selectedPaper.investment_insights
+                          .replace(/###\s+(.+)/g, '<h4 class="text-base font-bold mt-3 mb-2">$1</h4>')
+                          .replace(/##\s+(.+)/g, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
+                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\n\n/g, '<br/><br/>')
+                      : '暂无投资洞察'
+                  }}
+                />
               </div>
             </div>
           </div>
