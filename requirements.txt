@@ -1,0 +1,32 @@
+# Core dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+sqlalchemy>=2.0.0
+pandas>=2.1.0
+numpy>=1.25.0
+
+# Market data
+yfinance>=0.2.32
+akshare>=1.12.0
+
+# Database
+alembic>=1.12.0
+psycopg2-binary>=2.9.9
+
+# Data processing
+python-dateutil>=2.8.2
+pytz>=2023.3
+
+# API utilities
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+httpx>=0.25.0
+
+# Plotting (optional for now)
+# plotly>=5.18.0
+# matplotlib>=3.8.0
+
+# Development
+pytest>=7.4.0
+black>=23.11.0
+flake8>=6.1.0
