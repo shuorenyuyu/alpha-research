@@ -9,12 +9,11 @@ export default function Navigation() {
   const navItems = [
     { name: "Dashboard", path: "/" },
     { name: "Research", path: "/research" },
-    { name: "WeChat", path: "/wechat" },
     { name: "Stocks", path: "/stocks" },
   ];
 
   return (
-    <nav className="bg-black/50 backdrop-blur-md border-b border-gray-800">
+    <nav className="bg-black/50 backdrop-blur-md border-b border-gray-800 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">

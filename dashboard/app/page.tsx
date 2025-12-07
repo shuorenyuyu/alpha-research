@@ -15,6 +15,9 @@ export default function Home() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [stocks, setStocks] = useState<StockData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [portfolioValue, setPortfolioValue] = useState(0);
+  const [todayGain, setTodayGain] = useState(0);
+  const [todayGainPercent, setTodayGainPercent] = useState(0);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -23,19 +26,39 @@ export default function Home() {
 
     window.addEventListener("mousemove", handleMouseMove);
 
-    // Mock stock data
-    const mockStocks: StockData[] = [
-      { symbol: "NVDA", name: "NVIDIA", price: 135.50, change: 2.75, changePercent: 2.07 },
-      { symbol: "MSFT", name: "Microsoft", price: 425.80, change: -1.20, changePercent: -0.28 },
-      { symbol: "GOOGL", name: "Alphabet", price: 175.30, change: 3.50, changePercent: 2.04 },
-      { symbol: "TSLA", name: "Tesla", price: 248.90, change: 5.60, changePercent: 2.30 },
-      { symbol: "AAPL", name: "Apple", price: 195.20, change: -0.80, changePercent: -0.41 },
-    ];
-    
-    setTimeout(() => {
-      setStocks(mockStocks);
-      setLoading(false);
-    }, 500);
+    // Fetch real stock data
+    const fetchStocks = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/market/quotes?symbols=NVDA,MSFT,GOOGL,TSLA,AAPL');
+        if (response.ok) {
+          const data = await response.json();
+          const stockData = data.map((stock: any) => ({
+            symbol: stock.symbol,
+            name: stock.name,
+            price: stock.price,
+            change: stock.change,
+            changePercent: stock.changePercent // API uses camelCase
+          }));
+          setStocks(stockData);
+          
+          // Calculate portfolio stats (assuming 10 shares each)
+          const sharesPerStock = 10;
+          const totalValue = stockData.reduce((sum: number, stock: StockData) => sum + (stock.price * sharesPerStock), 0);
+          const totalGain = stockData.reduce((sum: number, stock: StockData) => sum + (stock.change * sharesPerStock), 0);
+          const gainPercent = (totalGain / (totalValue - totalGain)) * 100;
+          
+          setPortfolioValue(totalValue);
+          setTodayGain(totalGain);
+          setTodayGainPercent(gainPercent);
+        }
+      } catch (error) {
+        console.error('Error fetching stocks:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStocks();
 
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
@@ -87,14 +110,20 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-lg p-6 hover:border-blue-500 transition-all transform hover:scale-105">
             <h3 className="text-sm text-gray-400 mb-2">Total Portfolio Value</h3>
-            <p className="text-3xl font-bold text-white">$125,450</p>
-            <p className="text-sm text-green-400 mt-1">+$2,340 (1.9%)</p>
+            <p className="text-3xl font-bold text-white">${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className={`text-sm mt-1 ${todayGain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {todayGain >= 0 ? '+' : ''}${Math.abs(todayGain).toFixed(2)} ({todayGainPercent >= 0 ? '+' : ''}{todayGainPercent.toFixed(2)}%)
+            </p>
           </div>
           
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-lg p-6 hover:border-purple-500 transition-all transform hover:scale-105">
             <h3 className="text-sm text-gray-400 mb-2">Today's Gain/Loss</h3>
-            <p className="text-3xl font-bold text-green-400">+$1,250</p>
-            <p className="text-sm text-gray-400 mt-1">+1.0% today</p>
+            <p className={`text-3xl font-bold ${todayGain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {todayGain >= 0 ? '+' : ''}${Math.abs(todayGain).toFixed(2)}
+            </p>
+            <p className="text-sm text-gray-400 mt-1">
+              {todayGainPercent >= 0 ? '+' : ''}{todayGainPercent.toFixed(2)}% today
+            </p>
           </div>
           
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-lg p-6 hover:border-pink-500 transition-all transform hover:scale-105">

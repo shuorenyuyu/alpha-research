@@ -23,7 +23,7 @@ export default function ResearchPage() {
   useEffect(() => {
     const fetchPapers = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/research/papers?limit=50');
+        const response = await fetch('http://localhost:8001/api/research/papers?limit=50');
         if (response.ok) {
           const data = await response.json();
           setPapers(data);
@@ -108,44 +108,44 @@ export default function ResearchPage() {
       {/* Modal for full paper view */}
       {selectedPaper && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={() => setSelectedPaper(null)}
         >
           <div 
-            className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto p-8"
+            className="bg-gray-900 border border-gray-700 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto p-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 flex-1 pr-4">
+              <h2 className="text-2xl font-bold text-white flex-1 pr-4">
                 {selectedPaper.title}
               </h2>
               <button
                 onClick={() => setSelectedPaper(null)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
+                className="text-gray-400 hover:text-white text-3xl font-light leading-none"
               >
                 ×
               </button>
             </div>
 
-            <div className="mb-6">
-              <p className="text-gray-600"><strong>Authors:</strong> {selectedPaper.authors}</p>
-              <p className="text-gray-600"><strong>Venue:</strong> {selectedPaper.venue} ({selectedPaper.year})</p>
-              <p className="text-gray-600"><strong>Citations:</strong> {selectedPaper.citation_count}</p>
-              <a href={selectedPaper.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+            <div className="mb-6 space-y-2">
+              <p className="text-gray-300"><strong className="text-white">Authors:</strong> {selectedPaper.authors}</p>
+              <p className="text-gray-300"><strong className="text-white">Venue:</strong> {selectedPaper.venue} ({selectedPaper.year})</p>
+              <p className="text-gray-300"><strong className="text-white">Citations:</strong> {selectedPaper.citation_count}</p>
+              <a href={selectedPaper.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline inline-block">
                 View Paper →
               </a>
             </div>
 
-            <div className="border-t pt-6">
-              <h3 className="text-xl font-semibold mb-4 text-gray-900">📄 中文摘要</h3>
-              <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-strong:text-gray-900">
+            <div className="border-t border-gray-700 pt-6">
+              <h3 className="text-xl font-semibold mb-4 text-white">📄 中文摘要</h3>
+              <div className="prose prose-invert prose-sm max-w-none">
                 <div 
-                  className="whitespace-pre-wrap leading-relaxed"
+                  className="whitespace-pre-wrap leading-relaxed text-gray-300"
                   dangerouslySetInnerHTML={{
                     __html: selectedPaper.summary_zh
                       ? selectedPaper.summary_zh
-                          .replace(/##\s+(.+)/g, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
-                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/##\s+(.+)/g, '<h3 class="text-lg font-bold mt-4 mb-2 text-white">$1</h3>')
+                          .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white">$1</strong>')
                           .replace(/\n\n/g, '<br/><br/>')
                       : '暂无摘要'
                   }}
@@ -153,17 +153,17 @@ export default function ResearchPage() {
               </div>
             </div>
 
-            <div className="border-t mt-6 pt-6">
-              <h3 className="text-xl font-semibold mb-4 text-gray-900">💡 投资洞察</h3>
-              <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-strong:text-gray-900">
+            <div className="border-t border-gray-700 mt-6 pt-6">
+              <h3 className="text-xl font-semibold mb-4 text-white">💡 投资洞察</h3>
+              <div className="prose prose-invert prose-sm max-w-none">
                 <div 
-                  className="whitespace-pre-wrap leading-relaxed"
+                  className="whitespace-pre-wrap leading-relaxed text-gray-300"
                   dangerouslySetInnerHTML={{
                     __html: selectedPaper.investment_insights
                       ? selectedPaper.investment_insights
-                          .replace(/###\s+(.+)/g, '<h4 class="text-base font-bold mt-3 mb-2">$1</h4>')
-                          .replace(/##\s+(.+)/g, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
-                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/###\s+(.+)/g, '<h4 class="text-base font-bold mt-3 mb-2 text-white">$1</h4>')
+                          .replace(/##\s+(.+)/g, '<h3 class="text-lg font-bold mt-4 mb-2 text-white">$1</h3>')
+                          .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white">$1</strong>')
                           .replace(/\n\n/g, '<br/><br/>')
                       : '暂无投资洞察'
                   }}
