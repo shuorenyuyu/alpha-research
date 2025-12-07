@@ -26,6 +26,13 @@ data/market/
 data/research/
 data/backtest/
 
+# Generated articles (from research-tracker)
+data/wechat_articles/
+*.html
+*.md
+!README.md
+!**/README.md
+
 # Environment variables
 .env
 .env.local
@@ -49,3 +56,11 @@ htmlcov/
 # Temporary files
 *.tmp
 temp/
+
+# Frontend (Next.js)
+dashboard/.next/
+dashboard/out/
+dashboard/node_modules/
+dashboard/.env*.local
+dashboard/dist/
+dashboard/build/
