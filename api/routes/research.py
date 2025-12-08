@@ -203,16 +203,26 @@ async def get_wechat_article(filename: str):
             h4, h5 {
                 color: #d0d0d0 !important;
             }
-            .meta-info {
+            p {
+                color: #d0d0d0 !important;
+            }
+            .meta {
                 background: #2a2a2a !important;
-                color: #b0b0b0 !important;
+                color: #d0d0d0 !important;
+            }
+            .meta p {
+                color: #d0d0d0 !important;
             }
             .investment-section {
                 background: linear-gradient(135deg, #1e3a5f 0%, #2d1e3f 100%) !important;
             }
-            .abstract-section {
-                background: #252525 !important;
+            .abstract {
+                background: #1e2a3a !important;
                 border-left-color: #3b82f6 !important;
+                color: #d0d0d0 !important;
+            }
+            .content {
+                color: #d0d0d0 !important;
             }
             .tags {
                 background: #2a2a2a !important;
@@ -233,6 +243,9 @@ async def get_wechat_article(filename: str):
             }
             strong {
                 color: #f0f0f0 !important;
+            }
+            li {
+                color: #d0d0d0 !important;
             }
         </style>
         """
