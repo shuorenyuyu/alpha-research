@@ -67,3 +67,4 @@ dashboard/node_modules/
 dashboard/.env*.local
 dashboard/dist/
 dashboard/build/
+deploy.sh

@@ -58,15 +58,16 @@ alpha-research/
 
 ## 🚀 Features (Planned)
 
-### Phase 1: Foundation (Current)
+### Phase 1: Foundation ✅ COMPLETED
 - [x] Project structure setup
-- [ ] Database design (PostgreSQL/TimescaleDB)
-- [ ] Market data fetcher (Yahoo Finance)
-- [ ] Basic API endpoints
+- [x] Database design (SQLite for research papers)
+- [x] Market data fetcher (Yahoo Finance) - **WORKING WITH REAL DATA**
+- [x] Basic API endpoints
 
-### Phase 2: Research Integration
-- [ ] Sync AI papers from research-tracker
-- [ ] Display papers in dashboard
+### Phase 2: Research Integration ✅ COMPLETED
+- [x] Sync AI papers from research-tracker
+- [x] Display papers in dashboard
+- [x] WeChat article HTML viewer
 - [ ] Extract investment themes from summaries
 - [ ] Link papers to relevant stocks/sectors
 
@@ -82,11 +83,11 @@ alpha-research/
 - [ ] Graham's value metrics
 - [ ] Buffett-style analysis
 
-### Phase 5: Dashboard
+### Phase 5: Dashboard 🔄 IN PROGRESS
 - [ ] Stock screener
-- [ ] Portfolio tracker
+- [x] Portfolio tracker (basic UI ready)
 - [ ] Strategy performance charts
-- [ ] Research paper feed
+- [x] Research paper feed
 
 ---
 

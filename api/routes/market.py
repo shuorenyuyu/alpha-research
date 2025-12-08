@@ -96,7 +96,11 @@ class StockQuote(BaseModel):
     change_percent: float
     volume: int
     market_cap: Optional[int]
-    updated_at: str
+    high: float
+    low: float
+    open: float
+    previous_close: float
+    timestamp: str
 
 class HistoricalData(BaseModel):
     date: str
@@ -133,7 +137,11 @@ async def get_quote(symbol: str):
             change_percent=round(change_percent, 2),
             volume=info.get('volume', 0),
             market_cap=info.get('marketCap'),
-            updated_at=datetime.now().isoformat()
+            high=round(info.get('dayHigh', current_price), 2),
+            low=round(info.get('dayLow', current_price), 2),
+            open=round(info.get('open', current_price), 2),
+            previous_close=round(previous_close, 2),
+            timestamp=datetime.now().isoformat()
         )
         
     except Exception as e:
@@ -167,7 +175,11 @@ async def get_quotes(symbols: str):
                 change_percent=round(change_percent, 2),
                 volume=info.get('volume', 0),
                 market_cap=info.get('marketCap'),
-                updated_at=datetime.now().isoformat()
+                high=round(info.get('dayHigh', current_price), 2),
+                low=round(info.get('dayLow', current_price), 2),
+                open=round(info.get('open', current_price), 2),
+                previous_close=round(previous_close, 2),
+                timestamp=datetime.now().isoformat()
             ))
         except Exception as e:
             # Skip failed symbols
