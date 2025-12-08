@@ -51,14 +51,14 @@ class Paper(BaseModel):
 async def get_papers(
     limit: int = 20,
     offset: int = 0,
-    processed_only: bool = True
+    processed_only: bool = False
 ):
     """
     Get research papers
     
     - **limit**: Number of papers to return (default: 20)
     - **offset**: Pagination offset (default: 0)
-    - **processed_only**: Only return AI-summarized papers (default: true)
+    - **processed_only**: Only return AI-summarized papers (default: false)
     """
     try:
         conn = sqlite3.connect(DB_PATH)
