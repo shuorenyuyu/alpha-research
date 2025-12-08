@@ -33,7 +33,8 @@ WECHAT_PATH_TRACKER = os.path.join(
     "data",
     "wechat_articles"
 )
-WECHAT_PATH = WECHAT_PATH_LOCAL if os.path.exists(WECHAT_PATH_LOCAL) else WECHAT_PATH_TRACKER
+# Prefer research-tracker path for auto-sync, fall back to local if not available
+WECHAT_PATH = WECHAT_PATH_TRACKER if os.path.exists(WECHAT_PATH_TRACKER) else WECHAT_PATH_LOCAL
 
 class Paper(BaseModel):
     id: int
