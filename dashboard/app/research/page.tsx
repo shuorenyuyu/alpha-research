@@ -2,9 +2,6 @@
 
 import { useState, useEffect } from "react";
 
-// Force dynamic rendering
-export const dynamic = 'force-dynamic';
-
 interface WechatArticle {
   filename: string;
   date: string;
@@ -14,14 +11,23 @@ interface WechatArticle {
 export default function ResearchPage() {
   const [articles, setArticles] = useState<WechatArticle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchArticles = async () => {
       try {
-        const response = await fetch('/api/wechat-list-proxy');
+        console.log('Fetching articles from /api/wechat-list-proxy');
+        const response = await fetch('/api/wechat-list-proxy', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
+        console.log('Response status:', response.status);
         if (response.ok) {
           const data = await response.json();
+          console.log('Articles data:', data);
           // Parse article filenames to extract dates and create article objects
           const articleList = data.articles.map((filename: string) => {
             const dateMatch = filename.match(/wechat_(\d{8})\.html/);
@@ -34,10 +40,14 @@ export default function ResearchPage() {
           });
           setArticles(articleList);
         } else {
-          console.error('Failed to fetch articles');
+          const errorText = `Failed to fetch articles: ${response.status}`;
+          console.error(errorText);
+          setError(errorText);
         }
       } catch (error) {
-        console.error('Error fetching articles:', error);
+        const errorMsg = 'Error fetching articles: ' + String(error);
+        console.error(errorMsg);
+        setError(errorMsg);
       } finally {
         setLoading(false);
       }
@@ -57,12 +67,24 @@ export default function ResearchPage() {
     );
   }
 
-  if (!loading && articles.length === 0) {
+  if (!loading && (articles.length === 0 || error)) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-2xl text-gray-400">No research articles found</p>
-          <p className="text-gray-500 mt-2">Articles will be generated daily by research-tracker</p>
+          <p className="text-2xl text-gray-400">
+            {error ? 'Error loading articles' : 'No research articles found'}
+          </p>
+          <p className="text-gray-500 mt-2">
+            {error || 'Articles will be generated daily by research-tracker'}
+          </p>
+          {error && (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Retry
+            </button>
+          )}
         </div>
       </div>
     );
