@@ -165,7 +165,7 @@ async def list_wechat_articles():
 
 @router.get("/wechat/{filename}", response_class=HTMLResponse)
 async def get_wechat_article(filename: str):
-    """Get WeChat article HTML content with dark theme"""
+    """Get WeChat article - serves markdown with clean formatting for easy copy/paste"""
     try:
         # Security: only allow .html files and prevent path traversal
         if not filename.endswith('.html') or '/' in filename or '\\' in filename:
@@ -176,112 +176,138 @@ async def get_wechat_article(filename: str):
         md_filepath = os.path.join(WECHAT_PATH, md_filename)
         
         if os.path.exists(md_filepath):
-            # Read markdown and check if it's newer than HTML
-            html_filepath = os.path.join(WECHAT_PATH, filename)
-            md_mtime = os.path.getmtime(md_filepath)
+            # Read markdown
+            with open(md_filepath, 'r', encoding='utf-8') as f:
+                md_content = f.read()
             
-            if not os.path.exists(html_filepath) or md_mtime > os.path.getmtime(html_filepath):
-                # Convert markdown to styled HTML
-                with open(md_filepath, 'r', encoding='utf-8') as f:
-                    md_content = f.read()
-                
-                # Extract title for HTML
-                import re
-                title_match = re.search(r'# 🔬 (.+)', md_content)
-                title = title_match.group(1) if title_match else 'AI Research'
-                
-                # Basic markdown to HTML conversion
-                html_body = md_content
-                # Headers
-                html_body = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html_body, flags=re.MULTILINE)
-                html_body = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html_body, flags=re.MULTILINE)
-                html_body = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html_body, flags=re.MULTILINE)
-                html_body = re.sub(r'^####(.+)$', r'<h4>\1</h4>', html_body, flags=re.MULTILINE)
-                # Strong text
-                html_body = re.sub(r'\*\*(.+?):\*\*', r'<strong>\1:</strong>', html_body)
-                html_body = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html_body)
-                # Blockquotes
-                html_body = re.sub(r'^> (.+)$', r'<blockquote>\1</blockquote>', html_body, flags=re.MULTILINE)
-                # Lists
-                html_body = re.sub(r'^\- (.+)$', r'<li>\1</li>', html_body, flags=re.MULTILINE)
-                # Links
-                html_body = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" target="_blank">\1</a>', html_body)
-                # Horizontal rules
-                html_body = re.sub(r'^---$', r'<hr/>', html_body, flags=re.MULTILINE)
-                # Wrap paragraphs
-                lines = html_body.split('\n')
-                processed = []
-                for line in lines:
-                    line = line.strip()
-                    if line and not any(line.startswith(tag) for tag in ['<h', '<p', '<li', '<hr', '<blockquote', '<strong']):
-                        processed.append(f'        <p>{line}</p>')
-                    elif line:
-                        processed.append(f'        {line}')
-                html_body = '\n'.join(processed)
-                
-                # Create full HTML with styling
-                content = f'''<!DOCTYPE html>
+            # Extract title for HTML
+            import re
+            title_match = re.search(r'# 🔬 (.+)', md_content)
+            title = title_match.group(1) if title_match else 'AI Research'
+            
+            # Preserve markdown formatting but make it HTML-safe and styled
+            # Convert to HTML while keeping it readable
+            html_content = md_content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            
+            # Convert markdown syntax to HTML for display
+            html_content = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html_content, flags=re.MULTILINE)
+            html_content = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html_content, flags=re.MULTILINE)
+            html_content = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html_content, flags=re.MULTILINE)
+            html_content = re.sub(r'^#### (.+)$', r'<h4>\1</h4>', html_content, flags=re.MULTILINE)
+            
+            # Bold text
+            html_content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html_content)
+            
+            # Blockquotes
+            html_content = re.sub(r'^&gt; (.+)$', r'<div class="meta-line">\1</div>', html_content, flags=re.MULTILINE)
+            
+            # Links
+            html_content = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" target="_blank">\1</a>', html_content)
+            
+            # Horizontal rules
+            html_content = re.sub(r'^---$', r'<hr/>', html_content, flags=re.MULTILINE)
+            
+            # Lists
+            html_content = re.sub(r'^- (.+)$', r'<div class="list-item">• \1</div>', html_content, flags=re.MULTILINE)
+            
+            # Paragraphs - wrap non-tagged lines
+            lines = html_content.split('\n')
+            processed = []
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not any(stripped.startswith(tag) for tag in ['<h', '<div', '<hr', '<strong', '<a']):
+                    processed.append(f'<p>{stripped}</p>')
+                elif stripped:
+                    processed.append(stripped)
+                else:
+                    processed.append('<br/>')
+            
+            html_body = '\n'.join(processed)
+            
+            # Create clean HTML with dark theme
+            content = f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
     <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
             line-height: 1.8;
-            max-width: 800px;
-            margin: 0 auto;
+            background: #0a0a0a;
+            color: #e0e0e0;
             padding: 20px;
         }}
         .container {{
-            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            background: #1a1a1a;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }}
         h1 {{
-            font-size: 24px;
-            font-weight: bold;
-            margin: 20px 0;
-            padding-bottom: 10px;
+            font-size: 26px;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 0 0 20px 0;
+            padding-bottom: 15px;
             border-bottom: 3px solid #3b82f6;
         }}
         h2 {{
-            font-size: 20px;
-            font-weight: bold;
-            margin: 25px 0 10px;
+            font-size: 22px;
+            font-weight: 700;
+            color: #f0f0f0;
+            margin: 30px 0 15px 0;
             padding-left: 15px;
             border-left: 4px solid #3b82f6;
         }}
         h3 {{
-            font-size: 18px;
-            font-weight: bold;
-            margin: 18px 0 8px;
+            font-size: 19px;
+            font-weight: 600;
+            color: #e0e0e0;
+            margin: 25px 0 12px 0;
         }}
         h4 {{
-            font-size: 16px;
-            font-weight: bold;
-            margin: 15px 0 5px;
+            font-size: 17px;
+            font-weight: 600;
+            color: #d0d0d0;
+            margin: 20px 0 10px 0;
         }}
         p {{
-            margin: 10px 0;
-            line-height: 1.8;
+            margin: 12px 0;
+            line-height: 1.9;
+            color: #d0d0d0;
+            font-size: 16px;
+        }}
+        .meta-line {{
+            padding: 12px 20px;
+            margin: 15px 0;
+            background: #2a2a2a;
+            border-left: 4px solid #3b82f6;
+            color: #c0c0c0;
+            font-size: 15px;
+        }}
+        .list-item {{
+            margin: 8px 0 8px 20px;
+            line-height: 1.9;
+            color: #d0d0d0;
+            font-size: 16px;
         }}
         strong {{
             font-weight: 600;
-        }}
-        blockquote {{
-            padding: 10px 15px;
-            margin: 15px 0;
-            border-left: 4px solid #3b82f6;
-            background: #2a2a2a;
-            font-style: italic;
-        }}
-        li {{
-            margin: 8px 0;
-            line-height: 1.8;
+            color: #f0f0f0;
         }}
         a {{
             color: #60a5fa;
             text-decoration: none;
+            word-break: break-all;
         }}
         a:hover {{
             color: #93c5fd;
@@ -289,8 +315,19 @@ async def get_wechat_article(filename: str):
         }}
         hr {{
             border: none;
-            border-top: 1px solid #444;
-            margin: 20px 0;
+            border-top: 2px solid #333;
+            margin: 25px 0;
+        }}
+        br {{
+            display: block;
+            content: "";
+            margin: 8px 0;
+        }}
+        /* Make text selectable and copyable */
+        .container {{
+            user-select: text;
+            -webkit-user-select: text;
+            -moz-user-select: text;
         }}
     </style>
 </head>
@@ -300,12 +337,8 @@ async def get_wechat_article(filename: str):
     </div>
 </body>
 </html>'''
-            else:
-                # HTML exists and is newer, use it
-                with open(html_filepath, 'r', encoding='utf-8') as f:
-                    content = f.read()
         else:
-            # Fallback to HTML file
+            # Fallback to HTML file if markdown doesn't exist
             filepath = os.path.join(WECHAT_PATH, filename)
             
             if not os.path.exists(filepath):
