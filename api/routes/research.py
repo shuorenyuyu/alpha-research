@@ -171,13 +171,148 @@ async def get_wechat_article(filename: str):
         if not filename.endswith('.html') or '/' in filename or '\\' in filename:
             raise HTTPException(status_code=400, detail="Invalid filename")
         
-        filepath = os.path.join(WECHAT_PATH, filename)
+        # Try markdown file first (more up-to-date)
+        md_filename = filename.replace('.html', '.md')
+        md_filepath = os.path.join(WECHAT_PATH, md_filename)
         
-        if not os.path.exists(filepath):
-            raise HTTPException(status_code=404, detail="Article not found")
-        
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
+        if os.path.exists(md_filepath):
+            # Read markdown and check if it's newer than HTML
+            html_filepath = os.path.join(WECHAT_PATH, filename)
+            md_mtime = os.path.getmtime(md_filepath)
+            
+            if not os.path.exists(html_filepath) or md_mtime > os.path.getmtime(html_filepath):
+                # Convert markdown to styled HTML
+                with open(md_filepath, 'r', encoding='utf-8') as f:
+                    md_content = f.read()
+                
+                # Extract title for HTML
+                import re
+                title_match = re.search(r'# 🔬 (.+)', md_content)
+                title = title_match.group(1) if title_match else 'AI Research'
+                
+                # Basic markdown to HTML conversion
+                html_body = md_content
+                # Headers
+                html_body = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html_body, flags=re.MULTILINE)
+                html_body = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html_body, flags=re.MULTILINE)
+                html_body = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html_body, flags=re.MULTILINE)
+                html_body = re.sub(r'^####(.+)$', r'<h4>\1</h4>', html_body, flags=re.MULTILINE)
+                # Strong text
+                html_body = re.sub(r'\*\*(.+?):\*\*', r'<strong>\1:</strong>', html_body)
+                html_body = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html_body)
+                # Blockquotes
+                html_body = re.sub(r'^> (.+)$', r'<blockquote>\1</blockquote>', html_body, flags=re.MULTILINE)
+                # Lists
+                html_body = re.sub(r'^\- (.+)$', r'<li>\1</li>', html_body, flags=re.MULTILINE)
+                # Links
+                html_body = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" target="_blank">\1</a>', html_body)
+                # Horizontal rules
+                html_body = re.sub(r'^---$', r'<hr/>', html_body, flags=re.MULTILINE)
+                # Wrap paragraphs
+                lines = html_body.split('\n')
+                processed = []
+                for line in lines:
+                    line = line.strip()
+                    if line and not any(line.startswith(tag) for tag in ['<h', '<p', '<li', '<hr', '<blockquote', '<strong']):
+                        processed.append(f'        <p>{line}</p>')
+                    elif line:
+                        processed.append(f'        {line}')
+                html_body = '\n'.join(processed)
+                
+                # Create full HTML with styling
+                content = f'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            line-height: 1.8;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+        .container {{
+            padding: 20px;
+        }}
+        h1 {{
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #3b82f6;
+        }}
+        h2 {{
+            font-size: 20px;
+            font-weight: bold;
+            margin: 25px 0 10px;
+            padding-left: 15px;
+            border-left: 4px solid #3b82f6;
+        }}
+        h3 {{
+            font-size: 18px;
+            font-weight: bold;
+            margin: 18px 0 8px;
+        }}
+        h4 {{
+            font-size: 16px;
+            font-weight: bold;
+            margin: 15px 0 5px;
+        }}
+        p {{
+            margin: 10px 0;
+            line-height: 1.8;
+        }}
+        strong {{
+            font-weight: 600;
+        }}
+        blockquote {{
+            padding: 10px 15px;
+            margin: 15px 0;
+            border-left: 4px solid #3b82f6;
+            background: #2a2a2a;
+            font-style: italic;
+        }}
+        li {{
+            margin: 8px 0;
+            line-height: 1.8;
+        }}
+        a {{
+            color: #60a5fa;
+            text-decoration: none;
+        }}
+        a:hover {{
+            color: #93c5fd;
+            text-decoration: underline;
+        }}
+        hr {{
+            border: none;
+            border-top: 1px solid #444;
+            margin: 20px 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+{html_body}
+    </div>
+</body>
+</html>'''
+            else:
+                # HTML exists and is newer, use it
+                with open(html_filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+        else:
+            # Fallback to HTML file
+            filepath = os.path.join(WECHAT_PATH, filename)
+            
+            if not os.path.exists(filepath):
+                raise HTTPException(status_code=404, detail="Article not found")
+            
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
         
         # Inject dark theme CSS
         dark_theme_css = """
