@@ -23,12 +23,7 @@ export default function ResearchPage() {
   useEffect(() => {
     const fetchPapers = async () => {
       try {
-        // Use current hostname for production, localhost for development
-        const apiUrl = typeof window !== 'undefined' 
-          ? `${window.location.protocol}//${window.location.hostname}:8001/api/research/papers?limit=50`
-          : 'http://localhost:8001/api/research/papers?limit=50';
-        
-        const response = await fetch(apiUrl);
+        const response = await fetch('/api/research-proxy');
         if (response.ok) {
           const data = await response.json();
           setPapers(data);
