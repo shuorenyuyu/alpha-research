@@ -13,13 +13,17 @@ import os
 router = APIRouter()
 
 # Path to research-tracker database and articles
-DB_PATH = os.path.join(
+# Try local data directory first (for deployment), then fall back to research-tracker
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+DB_PATH_LOCAL = os.path.join(DATA_DIR, "papers.db")
+DB_PATH_TRACKER = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
     "..",
     "research-tracker",
     "data",
     "papers.db"
 )
+DB_PATH = DB_PATH_LOCAL if os.path.exists(DB_PATH_LOCAL) else DB_PATH_TRACKER
 
 WECHAT_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
