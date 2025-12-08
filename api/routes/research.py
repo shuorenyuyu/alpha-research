@@ -152,16 +152,78 @@ async def get_stats():
 
 @router.get("/wechat/list")
 async def list_wechat_articles():
-    """List available WeChat articles"""
+    """List available WeChat articles with titles"""
     try:
         if not os.path.exists(WECHAT_PATH):
             return {"articles": []}
         
-        articles = [f for f in os.listdir(WECHAT_PATH) if f.endswith('.html')]
-        articles.sort(reverse=True)  # Latest first
-        return {"articles": articles}
+        import re
+        
+        article_list = []
+        files = [f for f in os.listdir(WECHAT_PATH) if f.endswith('.html')]
+        files.sort(reverse=True)  # Latest first
+        
+        for filename in files:
+            # Extract date
+            date_match = re.search(r'wechat_(\d{8})\.html', filename)
+            date = date_match.group(1) if date_match else 'unknown'
+            
+            # Try to get title from markdown
+            md_filename = filename.replace('.html', '.md')
+            md_filepath = os.path.join(WECHAT_PATH, md_filename)
+            title = f"AI Research - {date[:4]}-{date[4:6]}-{date[6:8]}"
+            
+            if os.path.exists(md_filepath):
+                try:
+                    with open(md_filepath, 'r', encoding='utf-8') as f:
+                        content = f.read(500)  # Read first 500 chars
+                        title_match = re.search(r'# 🔬 (.+)', content)
+                        if title_match:
+                            title = title_match.group(1).strip()
+                except:
+                    pass
+            
+            article_list.append({
+                "filename": filename,
+                "date": date,
+                "title": title
+            })
+        
+        return {"articles": article_list}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing articles: {str(e)}")
+
+@router.delete("/wechat/{filename}")
+async def delete_wechat_article(filename: str):
+    """Delete a WeChat article (both .html and .md files)"""
+    try:
+        # Security: only allow .html files and prevent path traversal
+        if not filename.endswith('.html') or '/' in filename or '\\' in filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        
+        deleted_files = []
+        
+        # Delete HTML file
+        html_filepath = os.path.join(WECHAT_PATH, filename)
+        if os.path.exists(html_filepath):
+            os.remove(html_filepath)
+            deleted_files.append(filename)
+        
+        # Delete corresponding markdown file
+        md_filename = filename.replace('.html', '.md')
+        md_filepath = os.path.join(WECHAT_PATH, md_filename)
+        if os.path.exists(md_filepath):
+            os.remove(md_filepath)
+            deleted_files.append(md_filename)
+        
+        if not deleted_files:
+            raise HTTPException(status_code=404, detail="Article not found")
+        
+        return {"success": True, "deleted": deleted_files}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting article: {str(e)}")
 
 @router.get("/wechat/{filename}", response_class=HTMLResponse)
 async def get_wechat_article(filename: str):

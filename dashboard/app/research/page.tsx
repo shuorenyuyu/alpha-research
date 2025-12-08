@@ -28,17 +28,8 @@ export default function ResearchPage() {
         if (response.ok) {
           const data = await response.json();
           console.log('Articles data:', data);
-          // Parse article filenames to extract dates and create article objects
-          const articleList = data.articles.map((filename: string) => {
-            const dateMatch = filename.match(/wechat_(\d{8})\.html/);
-            const date = dateMatch ? dateMatch[1] : 'unknown';
-            return {
-              filename,
-              date,
-              title: `AI Research - ${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
-            };
-          });
-          setArticles(articleList);
+          // Backend now returns objects with filename, date, and title
+          setArticles(data.articles);
         } else {
           const errorText = `Failed to fetch articles: ${response.status}`;
           console.error(errorText);
@@ -55,6 +46,29 @@ export default function ResearchPage() {
 
     fetchArticles();
   }, []);
+
+  const deleteArticle = async (filename: string, title: string) => {
+    if (!confirm(`Delete article: ${title}?`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/wechat-delete-proxy?filename=${filename}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        // Remove from list
+        setArticles(articles.filter(a => a.filename !== filename));
+        alert('Article deleted successfully');
+      } else {
+        alert('Failed to delete article');
+      }
+    } catch (error) {
+      console.error('Error deleting article:', error);
+      alert('Error deleting article');
+    }
+  };
 
   if (loading) {
     return (
@@ -124,22 +138,43 @@ export default function ResearchPage() {
           {articles.map((article) => (
             <div
               key={article.filename}
-              className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-6 hover:border-blue-500 transition-all cursor-pointer group"
-              onClick={() => setSelectedArticle(article.filename)}
+              className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-6 hover:border-blue-500 transition-all group"
             >
               <div className="flex justify-between items-start">
-                <div>
+                <div 
+                  className="flex-1 cursor-pointer"
+                  onClick={() => setSelectedArticle(article.filename)}
+                >
                   <h2 className="text-2xl font-semibold text-white group-hover:text-blue-400 transition-colors">
                     {article.title}
                   </h2>
                   <p className="text-gray-400 mt-2">
-                    Published: {article.date.slice(0, 4)}-{article.date.slice(4, 6)}-{article.date.slice(6, 8)}
+                    📅 {article.date.slice(0, 4)}-{article.date.slice(4, 6)}-{article.date.slice(6, 8)}
                   </p>
                 </div>
-                <span className="text-blue-400 text-xl">→</span>
+                <div className="flex gap-2 items-start">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteArticle(article.filename, article.title);
+                    }}
+                    className="px-3 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-300 hover:text-red-200 rounded text-sm transition-colors"
+                    title="Delete article"
+                  >
+                    🗑️ Delete
+                  </button>
+                  <span 
+                    className="text-blue-400 text-xl cursor-pointer"
+                    onClick={() => setSelectedArticle(article.filename)}
+                  >
+                    →
+                  </span>
+                </div>
               </div>
               
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex gap-2"
+                onClick={() => setSelectedArticle(article.filename)}
+              >
                 <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-sm">
                   📄 Research Analysis
                 </span>
