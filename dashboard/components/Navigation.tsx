@@ -7,9 +7,9 @@ export default function Navigation() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: "Dashboard", path: "/" },
+    { name: "Home", path: "/" },
+    { name: "Dashboard", path: "/dashboard" },
     { name: "Research", path: "/research" },
-    { name: "Stocks", path: "/stocks" },
   ];
 
   return (
