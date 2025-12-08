@@ -29,7 +29,12 @@ export default function Home() {
     // Fetch real stock data
     const fetchStocks = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/market/quotes?symbols=NVDA,MSFT,GOOGL,TSLA,AAPL');
+        // Use current hostname for production, localhost for development
+        const apiUrl = typeof window !== 'undefined' 
+          ? `${window.location.protocol}//${window.location.hostname}:8001/api/market/quotes?symbols=NVDA,MSFT,GOOGL,TSLA,AAPL`
+          : 'http://localhost:8001/api/market/quotes?symbols=NVDA,MSFT,GOOGL,TSLA,AAPL';
+        
+        const response = await fetch(apiUrl);
         if (response.ok) {
           const data = await response.json();
           const stockData = data.map((stock: any) => ({
