@@ -16,8 +16,7 @@ export default function ResearchPage() {
   useEffect(() => {
     const fetchArticles = async () => {
       try {
-        const apiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-        const response = await fetch(`http://${apiHost}:8001/api/research/wechat/list`);
+        const response = await fetch('/api/wechat-list-proxy');
         if (response.ok) {
           const data = await response.json();
           // Parse article filenames to extract dates and create article objects
@@ -68,7 +67,6 @@ export default function ResearchPage() {
 
   // If an article is selected, show it in full screen
   if (selectedArticle) {
-    const apiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
     return (
       <div className="min-h-screen bg-black">
         <div className="sticky top-0 z-50 bg-gray-900 border-b border-gray-700 px-4 py-3">
@@ -80,7 +78,7 @@ export default function ResearchPage() {
           </button>
         </div>
         <iframe
-          src={`http://${apiHost}:8001/api/research/wechat/${selectedArticle}`}
+          src={`/api/wechat-article-proxy?filename=${selectedArticle}`}
           className="w-full"
           style={{ height: 'calc(100vh - 57px)' }}
           title="Research Article"
