@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 interface WechatArticle {
   filename: string;
   date: string;
