@@ -164,7 +164,7 @@ async def list_wechat_articles():
 
 @router.get("/wechat/{filename}", response_class=HTMLResponse)
 async def get_wechat_article(filename: str):
-    """Get WeChat article HTML content"""
+    """Get WeChat article HTML content with dark theme"""
     try:
         # Security: only allow .html files and prevent path traversal
         if not filename.endswith('.html') or '/' in filename or '\\' in filename:
@@ -177,6 +177,69 @@ async def get_wechat_article(filename: str):
         
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
+        
+        # Inject dark theme CSS
+        dark_theme_css = """
+        <style>
+            body {
+                background: #0a0a0a !important;
+                color: #e0e0e0 !important;
+            }
+            .container {
+                background: #1a1a1a !important;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+            }
+            h1 {
+                color: #ffffff !important;
+                border-bottom-color: #3b82f6 !important;
+            }
+            h2 {
+                color: #f0f0f0 !important;
+                border-left-color: #3b82f6 !important;
+            }
+            h3 {
+                color: #e0e0e0 !important;
+            }
+            h4, h5 {
+                color: #d0d0d0 !important;
+            }
+            .meta-info {
+                background: #2a2a2a !important;
+                color: #b0b0b0 !important;
+            }
+            .investment-section {
+                background: linear-gradient(135deg, #1e3a5f 0%, #2d1e3f 100%) !important;
+            }
+            .abstract-section {
+                background: #252525 !important;
+                border-left-color: #3b82f6 !important;
+            }
+            .tags {
+                background: #2a2a2a !important;
+            }
+            .tag {
+                background: #3b82f6 !important;
+                color: #ffffff !important;
+            }
+            a {
+                color: #60a5fa !important;
+            }
+            a:hover {
+                color: #93c5fd !important;
+            }
+            code {
+                background: #2a2a2a !important;
+                color: #e0e0e0 !important;
+            }
+            strong {
+                color: #f0f0f0 !important;
+            }
+        </style>
+        """
+        
+        # Inject the dark theme CSS before </head>
+        if '</head>' in content:
+            content = content.replace('</head>', f'{dark_theme_css}</head>')
         
         return HTMLResponse(content=content)
     except HTTPException:
