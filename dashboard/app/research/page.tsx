@@ -13,6 +13,9 @@ export default function ResearchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newPaper, setNewPaper] = useState({ title: '', content: '', url: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -46,6 +49,40 @@ export default function ResearchPage() {
 
     fetchArticles();
   }, []);
+
+  const createPaper = async () => {
+    if (!newPaper.title.trim() || !newPaper.content.trim()) {
+      alert('Please fill in both title and content');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/wechat-create-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newPaper),
+      });
+
+      if (response.ok) {
+        alert('Paper created successfully!');
+        setShowAddForm(false);
+        setNewPaper({ title: '', content: '', url: '' });
+        // Refresh articles list
+        window.location.reload();
+      } else {
+        const error = await response.json();
+        alert(`Failed to create paper: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error creating paper:', error);
+      alert('Error creating paper');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const deleteArticle = async (filename: string, title: string) => {
     if (!confirm(`Delete article: ${title}?`)) {
@@ -129,10 +166,20 @@ export default function ResearchPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 pt-4">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-4xl font-bold text-white mb-8">🔬 AI Research Papers</h1>
-        <p className="text-gray-400 mb-8">
-          Daily AI research paper analysis with Chinese summaries and investment insights
-        </p>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-4xl font-bold text-white">🔬 AI Research Papers</h1>
+            <p className="text-gray-400 mt-2">
+              Daily AI research paper analysis with Chinese summaries and investment insights
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg font-semibold hover:from-green-500 hover:to-blue-500 transition-all transform hover:scale-105"
+          >
+            ➕ Add New Paper
+          </button>
+        </div>
       
         <div className="grid gap-6">
           {articles.map((article) => (
@@ -186,6 +233,81 @@ export default function ResearchPage() {
           ))}
         </div>
       </div>
+
+      {/* Add Paper Modal */}
+      {showAddForm && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+          onClick={() => !submitting && setShowAddForm(false)}
+        >
+          <div 
+            className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-2xl p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-2xl font-bold text-white mb-6">📝 Add New Research Paper</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Paper Title *
+                </label>
+                <input
+                  type="text"
+                  value={newPaper.title}
+                  onChange={(e) => setNewPaper({ ...newPaper, title: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Enter research paper title"
+                  disabled={submitting}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Paper URL (Optional)
+                </label>
+                <input
+                  type="url"
+                  value={newPaper.url}
+                  onChange={(e) => setNewPaper({ ...newPaper, url: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  placeholder="https://arxiv.org/abs/..."
+                  disabled={submitting}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Research Content *
+                </label>
+                <textarea
+                  value={newPaper.content}
+                  onChange={(e) => setNewPaper({ ...newPaper, content: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 h-64 resize-none"
+                  placeholder="Enter research summary, key findings, investment insights..."
+                  disabled={submitting}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={createPaper}
+                disabled={submitting}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg font-semibold hover:from-green-500 hover:to-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Creating...' : '✅ Create Paper'}
+              </button>
+              <button
+                onClick={() => setShowAddForm(false)}
+                disabled={submitting}
+                className="px-6 py-3 bg-gray-700 text-white rounded-lg font-semibold hover:bg-gray-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -193,6 +193,70 @@ async def list_wechat_articles():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing articles: {str(e)}")
 
+class NewPaper(BaseModel):
+    title: str
+    content: str
+    url: Optional[str] = None
+
+@router.post("/wechat/create")
+async def create_wechat_article(paper: NewPaper):
+    """Create a new WeChat research article"""
+    try:
+        # Ensure directory exists
+        os.makedirs(WECHAT_PATH, exist_ok=True)
+        
+        # Generate filename with today's date
+        from datetime import datetime
+        today = datetime.now().strftime("%Y%m%d")
+        
+        # Check if file already exists for today
+        base_filename = f"wechat_{today}"
+        counter = 1
+        filename = base_filename
+        while os.path.exists(os.path.join(WECHAT_PATH, f"{filename}.md")):
+            filename = f"{base_filename}_{counter}"
+            counter += 1
+        
+        md_filename = f"{filename}.md"
+        md_filepath = os.path.join(WECHAT_PATH, md_filename)
+        
+        # Create markdown content
+        md_content = f"""# 🔬 {paper.title}
+
+> **发布日期**: {datetime.now().strftime("%Y-%m-%d")}  
+> **来源**: 手动添加
+"""
+        
+        if paper.url:
+            md_content += f"> **论文链接**: [{paper.url}]({paper.url})\n"
+        
+        md_content += f"""
+
+---
+
+## 📄 研究内容
+
+{paper.content}
+
+---
+
+## 📊 总结
+
+手动添加的研究论文分析。
+"""
+        
+        # Write markdown file
+        with open(md_filepath, 'w', encoding='utf-8') as f:
+            f.write(md_content)
+        
+        return {
+            "success": True,
+            "filename": f"{filename}.html",
+            "message": f"Article created: {md_filename}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating article: {str(e)}")
+
 @router.delete("/wechat/{filename}")
 async def delete_wechat_article(filename: str):
     """Delete a WeChat article (both .html and .md files)"""
