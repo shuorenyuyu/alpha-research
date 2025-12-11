@@ -21,12 +21,28 @@ try:
     from scrapers.semantic_scholar_scraper import SemanticScholarScraper
     from database.repository import PaperRepository
     from database.models import Paper
-    from utils.logger import setup_logger
+    # Import logger separately to avoid relative import issues
+    import logging
 except ImportError as e:
     print(f"Error importing modules: {e}", file=sys.stderr)
     print(f"Make sure research-tracker is set up at {RESEARCH_TRACKER}", file=sys.stderr)
     print("and venv is activated with: source ~/research-tracker/venv/bin/activate", file=sys.stderr)
     sys.exit(1)
+
+
+def create_simple_logger(quiet: bool = False):
+    """Create a simple logger for the scrapers"""
+    logger = logging.getLogger('custom_search')
+    logger.setLevel(logging.DEBUG if not quiet else logging.ERROR)
+    
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setLevel(logging.DEBUG if not quiet else logging.ERROR)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    
+    return logger
 
 
 def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all", quiet: bool = False):
@@ -45,7 +61,7 @@ def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all
     papers = []
     
     # Create a simple logger
-    logger = setup_logger('custom_search', log_file=None, console_output=not quiet)
+    logger = create_simple_logger(quiet)
     
     try:
         if source in ["arxiv", "all"]:
