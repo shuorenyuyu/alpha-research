@@ -98,6 +98,7 @@ alpha-research/
 - FastAPI (API server)
 - PostgreSQL / SQLite (time-series data)
 - SQLAlchemy (ORM)
+- Comprehensive logging system with trace IDs (see [docs/LOGGING.md](docs/LOGGING.md))
 - Pandas, NumPy (data analysis)
 
 **Market Data:**
