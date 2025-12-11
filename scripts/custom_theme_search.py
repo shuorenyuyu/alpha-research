@@ -28,7 +28,7 @@ except ImportError as e:
     sys.exit(1)
 
 
-def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all"):
+def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all", quiet: bool = False):
     """
     Search for papers by custom theme/topic
     
@@ -36,6 +36,7 @@ def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all
         theme: Research theme/topic to search
         max_results: Maximum number of results to return
         source: Data source ('arxiv', 'semantic_scholar', or 'all')
+        quiet: If True, suppress status messages (for JSON output)
     
     Returns:
         List of paper dictionaries
@@ -44,21 +45,26 @@ def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all
     
     try:
         if source in ["arxiv", "all"]:
-            print(f"🔍 Searching arXiv for: {theme}")
+            if not quiet:
+                print(f"🔍 Searching arXiv for: {theme}", file=sys.stderr)
             arxiv_scraper = ArxivScraper()
             arxiv_papers = arxiv_scraper.search(theme, max_results=max_results)
             papers.extend(arxiv_papers)
-            print(f"   Found {len(arxiv_papers)} papers from arXiv")
+            if not quiet:
+                print(f"   Found {len(arxiv_papers)} papers from arXiv", file=sys.stderr)
         
         if source in ["semantic_scholar", "all"]:
-            print(f"🔍 Searching Semantic Scholar for: {theme}")
+            if not quiet:
+                print(f"🔍 Searching Semantic Scholar for: {theme}", file=sys.stderr)
             ss_scraper = SemanticScholarScraper()
             ss_papers = ss_scraper.get_recent_papers([theme], max_results=max_results)
             papers.extend(ss_papers)
-            print(f"   Found {len(ss_papers)} papers from Semantic Scholar")
+            if not quiet:
+                print(f"   Found {len(ss_papers)} papers from Semantic Scholar", file=sys.stderr)
         
     except Exception as e:
-        print(f"❌ Error searching papers: {str(e)}", file=sys.stderr)
+        if not quiet:
+            print(f"❌ Error searching papers: {str(e)}", file=sys.stderr)
         return []
     
     # Remove duplicates by title
@@ -92,7 +98,8 @@ def main():
     
     args = parser.parse_args()
     
-    papers = search_papers_by_theme(args.theme, args.max_results, args.source)
+    # When outputting JSON, suppress status messages
+    papers = search_papers_by_theme(args.theme, args.max_results, args.source, quiet=args.json)
     
     if args.json:
         print(json.dumps(papers, indent=2, ensure_ascii=False))
