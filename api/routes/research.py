@@ -9,8 +9,13 @@ from pydantic import BaseModel
 from datetime import datetime
 import sqlite3
 import os
+import traceback
+import uuid
+import subprocess
+from ..logging_config import get_logger, research_logger, error_logger
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 # Path to research-tracker database and articles
 # Try local data directory first (for deployment), then fall back to research-tracker
@@ -64,6 +69,8 @@ async def get_papers(
     - **processed_only**: Only return AI-summarized papers (default: false)
     """
     try:
+        logger.debug(f"Fetching papers: limit={limit}, offset={offset}, processed_only={processed_only}")
+        
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -86,10 +93,13 @@ async def get_papers(
         conn.close()
         
         papers = [dict(row) for row in rows]
+        logger.info(f"Successfully fetched {len(papers)} papers")
         return papers
         
     except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        error_msg = f"Database error while fetching papers: {str(e)}"
+        error_logger.error(f"{error_msg}\nDB Path: {DB_PATH}")
+        raise HTTPException(status_code=500, detail={"error": error_msg, "db_path": DB_PATH})
 
 @router.get("/papers/{paper_id}", response_model=Paper)
 async def get_paper(paper_id: int):
@@ -195,10 +205,26 @@ async def list_wechat_articles():
 
 @router.post("/wechat/generate")
 async def generate_research_paper():
-    """Trigger automated research paper fetching and AI summary generation"""
+    """
+    Trigger automated research paper fetching and AI summary generation
+    
+    This endpoint runs the research-tracker workflow script which:
+    1. Fetches latest papers from ArXiv
+    2. Generates AI summaries in Chinese
+    3. Creates investment insights
+    4. Exports to WeChat-ready HTML format
+    
+    Returns:
+        Success response with execution details and trace ID for debugging
+    
+    Raises:
+        HTTPException: 404 if workflow script not found, 500 if execution fails
+    """
+    trace_id = str(uuid.uuid4())[:8]  # Short trace ID for logging
+    
+    research_logger.info(f"[{trace_id}] Starting research paper generation workflow")
+    
     try:
-        import subprocess
-        
         # Path to research-tracker workflow script
         script_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
@@ -208,32 +234,100 @@ async def generate_research_paper():
             "daily_workflow.sh"
         )
         
+        research_logger.info(f"[{trace_id}] Script path: {script_path}")
+        
         if not os.path.exists(script_path):
-            raise HTTPException(status_code=404, detail="Workflow script not found")
+            error_msg = f"Workflow script not found at: {script_path}"
+            research_logger.error(f"[{trace_id}] {error_msg}")
+            raise HTTPException(
+                status_code=404, 
+                detail={
+                    "error": error_msg,
+                    "trace_id": trace_id,
+                    "expected_path": script_path
+                }
+            )
+        
+        research_logger.info(f"[{trace_id}] Executing workflow script (timeout: 300s)...")
         
         # Run the workflow script
         result = subprocess.run(
             ["bash", script_path],
             capture_output=True,
             text=True,
-            timeout=300  # 5 minute timeout
+            timeout=300,  # 5 minute timeout
+            cwd=os.path.dirname(script_path)
         )
         
+        # Log stdout (info level)
+        if result.stdout:
+            research_logger.info(f"[{trace_id}] Workflow stdout:\n{result.stdout}")
+        
+        # Log stderr (warning level, even if success - may contain warnings)
+        if result.stderr:
+            research_logger.warning(f"[{trace_id}] Workflow stderr:\n{result.stderr}")
+        
         if result.returncode != 0:
+            error_msg = f"Workflow failed with exit code {result.returncode}"
+            error_logger.error(
+                f"[{trace_id}] {error_msg}\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
             raise HTTPException(
                 status_code=500, 
-                detail=f"Workflow failed: {result.stderr}"
+                detail={
+                    "error": error_msg,
+                    "trace_id": trace_id,
+                    "exit_code": result.returncode,
+                    "stderr": result.stderr,
+                    "stdout": result.stdout,
+                    "suggestion": "Check logs/research.log for detailed error information"
+                }
             )
+        
+        research_logger.info(f"[{trace_id}] Workflow completed successfully")
         
         return {
             "success": True,
             "message": "Research paper generated successfully",
-            "output": result.stdout
+            "trace_id": trace_id,
+            "output": result.stdout,
+            "timestamp": datetime.now().isoformat(),
+            "logs_path": "logs/research.log"
         }
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Workflow timeout (> 5 minutes)")
+        
+    except subprocess.TimeoutExpired as e:
+        error_msg = "Workflow timeout (exceeded 5 minutes)"
+        error_logger.error(f"[{trace_id}] {error_msg}")
+        raise HTTPException(
+            status_code=500, 
+            detail={
+                "error": error_msg,
+                "trace_id": trace_id,
+                "timeout_seconds": 300,
+                "suggestion": "The research workflow is taking too long. Check if ArXiv API is slow or if there are network issues."
+            }
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error running workflow: {str(e)}")
+        error_msg = f"Unexpected error: {str(e)}"
+        error_logger.error(
+            f"[{trace_id}] {error_msg}\n"
+            f"Traceback:\n{traceback.format_exc()}"
+        )
+        raise HTTPException(
+            status_code=500, 
+            detail={
+                "error": error_msg,
+                "trace_id": trace_id,
+                "type": type(e).__name__,
+                "traceback": traceback.format_exc(),
+                "suggestion": "Check logs/errors.log for full traceback"
+            }
+        )
 
 class NewPaper(BaseModel):
     title: str
@@ -596,3 +690,92 @@ async def get_wechat_article(filename: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading article: {str(e)}")
+
+@router.get("/logs/{log_type}")
+async def get_logs(log_type: str, lines: int = 100):
+    """
+    View application logs for debugging
+    
+    Args:
+        log_type: Type of log to view ('api', 'research', 'errors')
+        lines: Number of recent lines to return (default: 100, max: 1000)
+    
+    Returns:
+        Recent log entries with metadata
+    
+    Example:
+        GET /api/research/logs/research?lines=50
+    """
+    # Validate log type
+    valid_types = ['api', 'research', 'errors']
+    if log_type not in valid_types:
+        raise HTTPException(
+            status_code=400, 
+            detail={
+                "error": f"Invalid log type: {log_type}",
+                "valid_types": valid_types
+            }
+        )
+    
+    # Limit lines to prevent abuse
+    lines = min(lines, 1000)
+    
+    # Get log file path
+    log_file = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "..",
+        "logs",
+        f"{log_type}.log"
+    )
+    
+    logger.debug(f"Reading log file: {log_file} (last {lines} lines)")
+    
+    if not os.path.exists(log_file):
+        return {
+            "log_type": log_type,
+            "lines_requested": lines,
+            "lines_available": 0,
+            "entries": [],
+            "message": "Log file not yet created (no logs recorded)"
+        }
+    
+    try:
+        # Read last N lines efficiently
+        with open(log_file, 'r', encoding='utf-8') as f:
+            # Read entire file if small, otherwise tail
+            file_size = os.path.getsize(log_file)
+            
+            if file_size < 1024 * 1024:  # < 1MB, read all
+                all_lines = f.readlines()
+                log_lines = all_lines[-lines:]
+            else:
+                # For large files, seek to approximate position
+                f.seek(0, 2)  # End of file
+                file_end = f.tell()
+                f.seek(max(0, file_end - lines * 200), 0)  # Approximate 200 bytes/line
+                f.readline()  # Skip partial line
+                log_lines = f.readlines()[-lines:]
+        
+        return {
+            "log_type": log_type,
+            "log_file": log_file,
+            "lines_requested": lines,
+            "lines_available": len(log_lines),
+            "file_size_bytes": os.path.getsize(log_file),
+            "last_modified": datetime.fromtimestamp(os.path.getmtime(log_file)).isoformat(),
+            "entries": [line.strip() for line in log_lines if line.strip()],
+            "hint": "Use ?lines=N to get more/fewer lines (max 1000)"
+        }
+        
+    except Exception as e:
+        error_msg = f"Error reading log file: {str(e)}"
+        error_logger.error(f"{error_msg}\nLog file: {log_file}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": error_msg,
+                "log_file": log_file,
+                "traceback": traceback.format_exc()
+            }
+        )
+

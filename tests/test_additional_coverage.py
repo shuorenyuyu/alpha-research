@@ -151,7 +151,8 @@ class TestResearchRoutesAdditional:
         response = client.get('/api/research/papers')
         
         assert response.status_code == 500
-        assert 'Database error' in response.json()['detail']
+        assert 'error' in response.json()['detail']
+        assert 'Database error' in response.json()['detail']['error']
     
     def test_list_wechat_error_handling(self, client):
         """Test error handling in list_wechat_articles"""

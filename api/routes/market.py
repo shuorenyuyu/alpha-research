@@ -5,8 +5,10 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
 from pydantic import BaseModel
 from market.fetchers import market_fetcher
+from ..logging_config import get_logger
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 class StockQuote(BaseModel):
     symbol: str

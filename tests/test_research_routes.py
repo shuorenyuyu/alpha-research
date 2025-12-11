@@ -2,7 +2,7 @@
 Test suite for API routes - research.py
 """
 import pytest
-from unittest.mock import patch, Mock, mock_open
+from unittest.mock import patch, Mock, mock_open, MagicMock
 import os
 import tempfile
 import shutil
@@ -176,22 +176,25 @@ class TestResearchRoutes:
     
     def test_generate_research_paper_timeout(self, client):
         """Test workflow timeout"""
-        with patch('subprocess.run') as mock_run:
+        with patch('api.routes.research.subprocess.run') as mock_run:
             import subprocess
             mock_run.side_effect = subprocess.TimeoutExpired('cmd', 300)
             
             response = client.post('/api/research/wechat/generate')
             
             assert response.status_code == 500
-            assert 'timeout' in response.json()['detail'].lower()
+            assert 'timeout' in response.json()['detail']['error'].lower()
     
     def test_generate_research_paper_failure(self, client):
         """Test workflow execution failure"""
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value.returncode = 1
-            mock_run.return_value.stderr = 'Error message'
+        with patch('api.routes.research.subprocess.run') as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 1
+            mock_result.stderr = 'Error message'
+            mock_result.stdout = 'Some output'
+            mock_run.return_value = mock_result
             
             response = client.post('/api/research/wechat/generate')
             
             assert response.status_code == 500
-            assert 'Workflow failed' in response.json()['detail']
+            assert 'Workflow failed' in response.json()['detail']['error']
