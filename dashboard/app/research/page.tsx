@@ -59,16 +59,42 @@ export default function ResearchPage() {
         method: 'POST',
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        alert('Research paper generated successfully! Refreshing list...');
+        const message = data.message || 'Research paper generated successfully!';
+        const traceId = data.trace_id ? ` (Trace ID: ${data.trace_id})` : '';
+        alert(message + traceId + '\n\nRefreshing list...');
         window.location.reload();
       } else {
-        const error = await response.json();
-        alert(`Failed to generate paper: ${error.error || 'Unknown error'}`);
+        // Display detailed error information
+        let errorMsg = data.error || 'Unknown error';
+        
+        // Add trace ID if available for debugging
+        if (data.detail?.trace_id) {
+          errorMsg += `\n\nTrace ID: ${data.detail.trace_id}`;
+          errorMsg += '\nCheck the backend logs for more details.';
+        }
+        
+        // Add stderr details if available (truncated for readability)
+        if (data.detail?.stderr) {
+          const stderrPreview = data.detail.stderr.split('\n').slice(0, 5).join('\n');
+          errorMsg += `\n\nError details:\n${stderrPreview}`;
+          if (data.detail.stderr.split('\n').length > 5) {
+            errorMsg += '\n... (see backend logs for full error)';
+          }
+        }
+        
+        // Add suggestion if available
+        if (data.detail?.suggestion) {
+          errorMsg += `\n\nSuggestion: ${data.detail.suggestion}`;
+        }
+        
+        alert(`Failed to generate paper:\n\n${errorMsg}`);
       }
     } catch (error) {
       console.error('Error generating paper:', error);
-      alert('Error generating paper');
+      alert('Error generating paper: Failed to connect to the server.\n\nPlease ensure the backend API is running on port 8000.');
     } finally {
       setGenerating(false);
     }
