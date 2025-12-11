@@ -864,11 +864,21 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
         
         research_logger.info(f"[{trace_id}] Executing search script: {script_path}")
         
+        # Determine Python executable - use research-tracker's venv if available
+        research_tracker_path = os.path.join(
+            os.path.expanduser("~"),
+            "research-tracker"
+        )
+        venv_python = os.path.join(research_tracker_path, "venv", "bin", "python")
+        python_cmd = venv_python if os.path.exists(venv_python) else "python3"
+        
+        research_logger.info(f"[{trace_id}] Using Python: {python_cmd}")
+        
         # Execute search script
         try:
             result = subprocess.run(
                 [
-                    "python3",
+                    python_cmd,
                     script_path,
                     request.theme,
                     "--max-results", str(max_results),

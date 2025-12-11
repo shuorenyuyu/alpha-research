@@ -10,12 +10,22 @@ from pathlib import Path
 
 # Add research-tracker to path
 RESEARCH_TRACKER = Path.home() / "research-tracker"
+if not RESEARCH_TRACKER.exists():
+    # Try relative path for local development
+    RESEARCH_TRACKER = Path(__file__).parent.parent.parent / "research-tracker"
+
 sys.path.insert(0, str(RESEARCH_TRACKER / "src"))
 
-from scrapers.arxiv_scraper import ArxivScraper
-from scrapers.semantic_scholar_scraper import SemanticScholarScraper
-from database.repository import PaperRepository
-from database.models import Paper
+try:
+    from scrapers.arxiv_scraper import ArxivScraper
+    from scrapers.semantic_scholar_scraper import SemanticScholarScraper
+    from database.repository import PaperRepository
+    from database.models import Paper
+except ImportError as e:
+    print(f"Error importing modules: {e}", file=sys.stderr)
+    print(f"Make sure research-tracker is set up at {RESEARCH_TRACKER}", file=sys.stderr)
+    print("and venv is activated with: source ~/research-tracker/venv/bin/activate", file=sys.stderr)
+    sys.exit(1)
 
 
 def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all"):
