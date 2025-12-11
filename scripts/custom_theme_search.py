@@ -123,6 +123,15 @@ def main():
     # When outputting JSON, suppress status messages
     papers = search_papers_by_theme(args.theme, args.max_results, args.source, quiet=args.json)
     
+    # Convert datetime objects to strings for JSON serialization
+    if args.json:
+        for paper in papers:
+            for key, value in paper.items():
+                if hasattr(value, 'isoformat'):  # datetime object
+                    paper[key] = value.isoformat()
+                elif hasattr(value, 'strftime'):  # date object
+                    paper[key] = value.strftime('%Y-%m-%d')
+    
     if args.json:
         print(json.dumps(papers, indent=2, ensure_ascii=False))
     else:
