@@ -8,12 +8,28 @@ interface WechatArticle {
   title: string;
 }
 
+interface SearchPaper {
+  title: string;
+  authors: string[];
+  published_date?: string;
+  citations?: number;
+  url?: string;
+  abstract?: string;
+}
+
 export default function ResearchPage() {
   const [articles, setArticles] = useState<WechatArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  
+  // Custom theme search state
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchTheme, setSearchTheme] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchPaper[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchSource, setSearchSource] = useState<'all' | 'arxiv' | 'semantic_scholar'>('all');
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -122,6 +138,48 @@ export default function ResearchPage() {
       alert('Error deleting article');
     }
   };
+  
+  const searchPapersByTheme = async () => {
+    if (!searchTheme.trim()) {
+      alert('Please enter a research theme');
+      return;
+    }
+    
+    setSearching(true);
+    setSearchResults([]);
+    
+    try {
+      const response = await fetch('http://localhost:8000/api/research/search/theme', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          theme: searchTheme,
+          max_results: 10,
+          source: searchSource
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setSearchResults(data.papers || []);
+        if (data.papers?.length === 0) {
+          alert(`No papers found for "${searchTheme}". Try a different theme or source.`);
+        }
+      } else {
+        const errorMsg = data.detail?.error || 'Search failed';
+        const traceId = data.detail?.trace_id ? ` (Trace ID: ${data.detail.trace_id})` : '';
+        alert(`Search failed: ${errorMsg}${traceId}`);
+      }
+    } catch (error) {
+      console.error('Error searching papers:', error);
+      alert('Error searching papers: Failed to connect to the server.\n\nPlease ensure the backend API is running on port 8000.');
+    } finally {
+      setSearching(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -189,14 +247,144 @@ export default function ResearchPage() {
               Daily AI research paper analysis with Chinese summaries and investment insights
             </p>
           </div>
-          <button
-            onClick={generatePaper}
-            disabled={generating}
-            className="px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg font-semibold hover:from-green-500 hover:to-blue-500 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-          >
-            {generating ? '🔄 Generating...' : '🤖 Auto-Generate Paper'}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowSearchModal(true)}
+              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-500 hover:to-pink-500 transition-all transform hover:scale-105"
+            >
+              🔍 Custom Theme Search
+            </button>
+            <button
+              onClick={generatePaper}
+              disabled={generating}
+              className="px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg font-semibold hover:from-green-500 hover:to-blue-500 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              {generating ? '🔄 Generating...' : '🤖 Auto-Generate Paper'}
+            </button>
+          </div>
         </div>
+        
+        {/* Custom Theme Search Modal */}
+        {showSearchModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-gray-800 border border-gray-700 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-700">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-white">🔍 Search Papers by Theme</h2>
+                  <button
+                    onClick={() => {
+                      setShowSearchModal(false);
+                      setSearchResults([]);
+                      setSearchTheme('');
+                    }}
+                    className="text-gray-400 hover:text-white text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="text-gray-400 mt-2">
+                  Search for research papers on specific topics using arXiv and Semantic Scholar
+                </p>
+              </div>
+              
+              <div className="p-6">
+                {/* Search Form */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Research Theme
+                    </label>
+                    <input
+                      type="text"
+                      value={searchTheme}
+                      onChange={(e) => setSearchTheme(e.target.value)}
+                      placeholder="e.g., transformers, reinforcement learning, computer vision..."
+                      className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      onKeyPress={(e) => e.key === 'Enter' && searchPapersByTheme()}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Data Source
+                    </label>
+                    <div className="flex gap-2">
+                      {(['all', 'arxiv', 'semantic_scholar'] as const).map((source) => (
+                        <button
+                          key={source}
+                          onClick={() => setSearchSource(source)}
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            searchSource === source
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          {source === 'all' ? '🌐 All' : source === 'arxiv' ? '📄 arXiv' : '🔬 Semantic Scholar'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={searchPapersByTheme}
+                    disabled={searching || !searchTheme.trim()}
+                    className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-500 hover:to-pink-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {searching ? '🔄 Searching...' : '🔍 Search Papers'}
+                  </button>
+                </div>
+                
+                {/* Search Results */}
+                {searchResults.length > 0 && (
+                  <div className="mt-6 space-y-4">
+                    <h3 className="text-xl font-semibold text-white">
+                      📚 Found {searchResults.length} papers
+                    </h3>
+                    {searchResults.map((paper, index) => (
+                      <div
+                        key={index}
+                        className="bg-gray-700/50 border border-gray-600 rounded-lg p-4 hover:border-purple-500 transition-all"
+                      >
+                        <h4 className="text-lg font-semibold text-white mb-2">
+                          {paper.title}
+                        </h4>
+                        {paper.authors && paper.authors.length > 0 && (
+                          <p className="text-sm text-gray-400 mb-2">
+                            👥 {paper.authors.slice(0, 3).join(', ')}
+                            {paper.authors.length > 3 && ' et al.'}
+                          </p>
+                        )}
+                        <div className="flex gap-3 text-sm text-gray-300">
+                          {paper.published_date && (
+                            <span>📅 {paper.published_date}</span>
+                          )}
+                          {paper.citations !== undefined && paper.citations !== null && (
+                            <span>📊 {paper.citations.toLocaleString()} citations</span>
+                          )}
+                        </div>
+                        {paper.abstract && (
+                          <p className="text-sm text-gray-400 mt-2 line-clamp-3">
+                            {paper.abstract}
+                          </p>
+                        )}
+                        {paper.url && (
+                          <a
+                            href={paper.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-2 text-purple-400 hover:text-purple-300 text-sm"
+                          >
+                            🔗 View Paper →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       
         <div className="grid gap-6">
           {articles.map((article) => (

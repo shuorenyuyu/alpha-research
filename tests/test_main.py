@@ -2,6 +2,7 @@
 Test suite for main FastAPI application
 """
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from api.main import app
@@ -48,6 +49,47 @@ class TestMainApp:
     
     def test_openapi_json(self, client):
         """Test OpenAPI JSON schema"""
+        response = client.get("/openapi.json")
+        assert response.status_code == 200
+        
+        schema = response.json()
+        assert schema["info"]["title"] == "Alpha Research API"
+        assert schema["info"]["version"] == "1.0.0"
+    
+    def test_startup_event(self, client):
+        """Test startup event is logged"""
+        # Startup is called automatically when app starts
+        # We can trigger it again for testing
+        from api.main import startup_event
+        import asyncio
+        
+        # Should not raise exception
+        asyncio.run(startup_event())
+    
+    def test_shutdown_event(self, client):
+        """Test shutdown event is logged"""
+        from api.main import shutdown_event
+        import asyncio
+        
+        # Should not raise exception
+        asyncio.run(shutdown_event())
+    
+    def test_middleware_error_handling(self, client):
+        """Test middleware handles errors correctly"""
+        # Trigger an error by requesting non-existent endpoint
+        response = client.get("/api/nonexistent/endpoint")
+        assert response.status_code == 404
+    
+    def test_root_endpoint_logs_path(self, client):
+        """Test root endpoint includes log paths"""
+        response = client.get("/")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "logs" in data
+        assert "api" in data["logs"]
+        assert "research" in data["logs"]
+        assert "errors" in data["logs"]
         response = client.get("/openapi.json")
         
         assert response.status_code == 200

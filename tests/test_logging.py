@@ -241,6 +241,25 @@ class TestLogViewer:
             data = response.json()
             assert data["lines_available"] == 0
             assert "not yet created" in data["message"]
+    
+    def test_get_logs_default_lines_parameter(self, client):
+        """Test default lines parameter when not specified"""
+        response = client.get("/api/research/logs/api")
+        assert response.status_code == 200
+        
+        data = response.json()
+        # Default should be 100 lines
+        assert data["lines_requested"] == 100
+    
+    def test_get_logs_read_error(self, client):
+        """Test handling of log file read errors"""
+        with patch('api.routes.research.os.path.exists', return_value=True):
+            with patch('builtins.open', side_effect=PermissionError("Access denied")):
+                response = client.get("/api/research/logs/api")
+                assert response.status_code == 500
+                
+                data = response.json()
+                assert "error" in data["detail"]
 
 
 class TestErrorLogging:

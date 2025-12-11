@@ -779,3 +779,184 @@ async def get_logs(log_type: str, lines: int = 100):
             }
         )
 
+
+class ThemeSearchRequest(BaseModel):
+    """Request model for custom theme search"""
+    theme: str
+    max_results: Optional[int] = 10
+    source: Optional[str] = "all"
+
+
+class ThemeSearchResponse(BaseModel):
+    """Response model for custom theme search"""
+    success: bool
+    theme: str
+    total_results: int
+    papers: List[dict]
+    trace_id: str
+
+
+@router.post("/search/theme", response_model=ThemeSearchResponse)
+async def search_papers_by_theme(request: ThemeSearchRequest):
+    """
+    Search for research papers by custom theme/topic
+    
+    This endpoint allows users to search for papers on specific research themes
+    using arXiv and Semantic Scholar APIs.
+    
+    - **theme**: Research theme/topic to search (e.g., "reinforcement learning", "transformers")
+    - **max_results**: Maximum number of results to return (default: 10, max: 50)
+    - **source**: Data source - 'arxiv', 'semantic_scholar', or 'all' (default: 'all')
+    
+    Returns list of papers with title, authors, abstract, citations, and URLs.
+    """
+    trace_id = str(uuid.uuid4())[:8]
+    
+    try:
+        # Validate inputs
+        if not request.theme or len(request.theme.strip()) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Theme must be at least 2 characters long",
+                    "trace_id": trace_id
+                }
+            )
+        
+        # Limit max results
+        max_results = min(request.max_results, 50)
+        
+        # Validate source
+        valid_sources = ["arxiv", "semantic_scholar", "all"]
+        if request.source not in valid_sources:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": f"Invalid source. Must be one of: {', '.join(valid_sources)}",
+                    "valid_sources": valid_sources,
+                    "trace_id": trace_id
+                }
+            )
+        
+        research_logger.info(
+            f"[{trace_id}] Custom theme search requested: "
+            f"theme='{request.theme}', max_results={max_results}, source={request.source}"
+        )
+        
+        # Path to custom search script
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "scripts",
+            "custom_theme_search.py"
+        )
+        
+        if not os.path.exists(script_path):
+            error_msg = f"Custom theme search script not found: {script_path}"
+            error_logger.error(f"[{trace_id}] {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": error_msg,
+                    "trace_id": trace_id,
+                    "suggestion": "Contact administrator - search script is missing"
+                }
+            )
+        
+        research_logger.info(f"[{trace_id}] Executing search script: {script_path}")
+        
+        # Execute search script
+        try:
+            result = subprocess.run(
+                [
+                    "python3",
+                    script_path,
+                    request.theme,
+                    "--max-results", str(max_results),
+                    "--source", request.source,
+                    "--json"
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,  # 60 second timeout
+                cwd=os.path.dirname(script_path)
+            )
+            
+            research_logger.info(
+                f"[{trace_id}] Search script completed with exit code: {result.returncode}"
+            )
+            
+            if result.returncode != 0:
+                error_msg = f"Search script failed with exit code {result.returncode}"
+                error_logger.error(
+                    f"[{trace_id}] {error_msg}\n"
+                    f"stderr: {result.stderr}\n"
+                    f"stdout: {result.stdout}"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error": error_msg,
+                        "stderr": result.stderr[:500],  # First 500 chars
+                        "trace_id": trace_id,
+                        "suggestion": "Try a different theme or check API rate limits"
+                    }
+                )
+            
+            # Parse JSON output
+            import json
+            try:
+                papers = json.loads(result.stdout)
+                research_logger.info(f"[{trace_id}] Found {len(papers)} papers for theme '{request.theme}'")
+                
+                return ThemeSearchResponse(
+                    success=True,
+                    theme=request.theme,
+                    total_results=len(papers),
+                    papers=papers,
+                    trace_id=trace_id
+                )
+                
+            except json.JSONDecodeError as e:
+                error_msg = f"Failed to parse search results: {str(e)}"
+                error_logger.error(
+                    f"[{trace_id}] {error_msg}\n"
+                    f"stdout: {result.stdout[:500]}"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error": error_msg,
+                        "trace_id": trace_id,
+                        "raw_output": result.stdout[:200]
+                    }
+                )
+        
+        except subprocess.TimeoutExpired:
+            error_msg = "Search timed out after 60 seconds"
+            error_logger.error(f"[{trace_id}] {error_msg}")
+            raise HTTPException(
+                status_code=504,
+                detail={
+                    "error": error_msg,
+                    "trace_id": trace_id,
+                    "suggestion": "Try a more specific theme or reduce max_results"
+                }
+            )
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        error_msg = f"Unexpected error during theme search: {str(e)}"
+        error_logger.error(
+            f"[{trace_id}] {error_msg}\n"
+            f"Traceback:\n{traceback.format_exc()}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": error_msg,
+                "trace_id": trace_id
+            }
+        )
+
