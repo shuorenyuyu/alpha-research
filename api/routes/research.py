@@ -193,6 +193,48 @@ async def list_wechat_articles():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing articles: {str(e)}")
 
+@router.post("/wechat/generate")
+async def generate_research_paper():
+    """Trigger automated research paper fetching and AI summary generation"""
+    try:
+        import subprocess
+        
+        # Path to research-tracker workflow script
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "..",
+            "research-tracker",
+            "scripts",
+            "daily_workflow.sh"
+        )
+        
+        if not os.path.exists(script_path):
+            raise HTTPException(status_code=404, detail="Workflow script not found")
+        
+        # Run the workflow script
+        result = subprocess.run(
+            ["bash", script_path],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Workflow failed: {result.stderr}"
+            )
+        
+        return {
+            "success": True,
+            "message": "Research paper generated successfully",
+            "output": result.stdout
+        }
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Workflow timeout (> 5 minutes)")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error running workflow: {str(e)}")
+
 class NewPaper(BaseModel):
     title: str
     content: str
