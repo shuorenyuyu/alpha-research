@@ -21,6 +21,7 @@ try:
     from scrapers.semantic_scholar_scraper import SemanticScholarScraper
     from database.repository import PaperRepository
     from database.models import Paper
+    from utils.logger import setup_logger
 except ImportError as e:
     print(f"Error importing modules: {e}", file=sys.stderr)
     print(f"Make sure research-tracker is set up at {RESEARCH_TRACKER}", file=sys.stderr)
@@ -43,11 +44,14 @@ def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all
     """
     papers = []
     
+    # Create a simple logger
+    logger = setup_logger('custom_search', log_file=None, console_output=not quiet)
+    
     try:
         if source in ["arxiv", "all"]:
             if not quiet:
                 print(f"🔍 Searching arXiv for: {theme}", file=sys.stderr)
-            arxiv_scraper = ArxivScraper()
+            arxiv_scraper = ArxivScraper(logger=logger)
             arxiv_papers = arxiv_scraper.search(theme, max_results=max_results)
             papers.extend(arxiv_papers)
             if not quiet:
@@ -56,7 +60,7 @@ def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all
         if source in ["semantic_scholar", "all"]:
             if not quiet:
                 print(f"🔍 Searching Semantic Scholar for: {theme}", file=sys.stderr)
-            ss_scraper = SemanticScholarScraper()
+            ss_scraper = SemanticScholarScraper(logger=logger)
             ss_papers = ss_scraper.get_recent_papers([theme], max_results=max_results)
             papers.extend(ss_papers)
             if not quiet:
@@ -65,6 +69,8 @@ def search_papers_by_theme(theme: str, max_results: int = 10, source: str = "all
     except Exception as e:
         if not quiet:
             print(f"❌ Error searching papers: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return []
     
     # Remove duplicates by title
