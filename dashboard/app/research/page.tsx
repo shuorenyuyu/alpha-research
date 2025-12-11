@@ -149,7 +149,7 @@ export default function ResearchPage() {
     setSearchResults([]);
     
     try {
-      const response = await fetch('http://localhost:8000/api/research/search/theme', {
+      const response = await fetch('/api/theme-search-proxy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
