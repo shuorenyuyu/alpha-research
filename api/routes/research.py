@@ -174,19 +174,37 @@ async def list_wechat_articles():
         files.sort(reverse=True)  # Latest first
         
         for filename in files:
-            # Extract date
-            date_match = re.search(r'wechat_(\d{8})\.html', filename)
+            # Extract date (support both formats: wechat_20251213.html and wechat_20251213_090141.html)
+            date_match = re.search(r'wechat_(\d{8})', filename)
             date = date_match.group(1) if date_match else 'unknown'
             
-            # Try to get title from markdown
+            # Try to extract title from HTML file directly
+            title = f"AI Research - {date[:4]}-{date[4:6]}-{date[6:8]}" if date != 'unknown' else "AI Research Article"
+            
+            html_filepath = os.path.join(WECHAT_PATH, filename)
+            if os.path.exists(html_filepath):
+                try:
+                    with open(html_filepath, 'r', encoding='utf-8') as f:
+                        content = f.read(1000)  # Read first 1000 chars
+                        # Try to extract title from h1 tag
+                        title_match = re.search(r'<h1>🔬 (.+?)</h1>', content)
+                        if title_match:
+                            title = title_match.group(1).strip()
+                        else:
+                            # Fallback to <title> tag
+                            title_match = re.search(r'<title>(.+?) - AI研究前沿</title>', content)
+                            if title_match:
+                                title = title_match.group(1).strip()
+                except:
+                    pass
+            
+            # Also try markdown if it exists
             md_filename = filename.replace('.html', '.md')
             md_filepath = os.path.join(WECHAT_PATH, md_filename)
-            title = f"AI Research - {date[:4]}-{date[4:6]}-{date[6:8]}"
-            
             if os.path.exists(md_filepath):
                 try:
                     with open(md_filepath, 'r', encoding='utf-8') as f:
-                        content = f.read(500)  # Read first 500 chars
+                        content = f.read(500)
                         title_match = re.search(r'# 🔬 (.+)', content)
                         if title_match:
                             title = title_match.group(1).strip()
