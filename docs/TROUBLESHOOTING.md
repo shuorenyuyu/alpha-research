@@ -203,8 +203,8 @@ On your Azure VM (20.51.208.13):
    ```python
    allow_origins=[
        "http://localhost:3000",
-       "http://alpha-research.eastus.cloudapp.azure.com",
-       "http://20.51.208.13:3000"
+       "http://alpha-research.southeastasia.cloudapp.azure.com:3000",
+       "http://57.155.1.26:3000"
    ]
    ```
 

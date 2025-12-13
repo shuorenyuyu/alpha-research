@@ -220,11 +220,11 @@ alembic upgrade head
 
 ## Additional Context
 - **Research Papers**: Synced from `research-tracker` project
-- **Production Server**: Azure VM at 20.51.208.13
+- **Production Server**: 57.155.1.26 (wobbler)
 - **SSH Access**: `ssh research-azure` (after setup)
 - **Live URLs**: 
-  - Frontend: http://alpha-research.eastus.cloudapp.azure.com/
-  - API: http://20.51.208.13:8001
+  - Frontend: http://alpha-research.southeastasia.cloudapp.azure.com:3000/research
+  - API: http://57.155.1.26:8001
 
 ## Questions or Issues?
 Refer to:
