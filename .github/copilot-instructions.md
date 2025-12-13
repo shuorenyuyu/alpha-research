@@ -223,7 +223,7 @@ alembic upgrade head
 - **Production Server**: 57.155.1.26 (wobbler)
 - **SSH Access**: `ssh research-azure` (after setup)
 - **Live URLs**: 
-  - Frontend: http://alpha-research.southeastasia.cloudapp.azure.com:3000/research
+  - Frontend: http://alpha-research.southeastasia.cloudapp.azure.com
   - API: http://57.155.1.26:8001
 
 ## Questions or Issues?
