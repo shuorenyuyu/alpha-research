@@ -4,7 +4,7 @@ FastAPI application for Alpha Research
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from .routes import research, market
+from .routes import research, market, futu, portfolio
 from .logging_config import get_logger, api_logger
 import time
 import traceback
@@ -74,6 +74,8 @@ app.add_middleware(
 # Include routers
 app.include_router(research.router, prefix="/api/research", tags=["research"])
 app.include_router(market.router, prefix="/api/market", tags=["market"])
+app.include_router(futu.router, prefix="/api/futu", tags=["futu"])
+app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
 
 @app.get("/")
 async def root():
@@ -96,6 +98,8 @@ async def startup_event():
     logger.info("🚀 Alpha Research API starting up...")
     logger.info("📊 Market data routes: /api/market/*")
     logger.info("🔬 Research routes: /api/research/*")
+    logger.info("💰 Futu account routes: /api/futu/*")
+    logger.info("🎯 Portfolio strategy routes: /api/portfolio/*")
     logger.info("📝 Logs available at: /api/research/logs/{api|research|errors}")
 
 @app.on_event("shutdown")

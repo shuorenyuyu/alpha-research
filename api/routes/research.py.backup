@@ -12,19 +12,10 @@ import os
 import traceback
 import uuid
 import subprocess
-from contextlib import contextmanager
 from ..logging_config import get_logger, research_logger, error_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
-
-
-def _safe_log(log_fn, *args, **kwargs) -> None:
-    """Guard logging calls to avoid test patches breaking handlers."""
-    try:
-        log_fn(*args, **kwargs)
-    except Exception:
-        pass
 
 # Path to research-tracker database and articles
 # Try local data directory first (for deployment), then fall back to research-tracker
@@ -49,16 +40,6 @@ WECHAT_PATH_TRACKER = os.path.join(
 )
 # Prefer research-tracker path for auto-sync, fall back to local if not available
 WECHAT_PATH = WECHAT_PATH_TRACKER if os.path.exists(WECHAT_PATH_TRACKER) else WECHAT_PATH_LOCAL
-
-
-@contextmanager
-def get_db():
-    """Simple DB context to satisfy tests; yields sqlite3 connection."""
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 class Paper(BaseModel):
     id: int
@@ -90,26 +71,27 @@ async def get_papers(
     try:
         logger.debug(f"Fetching papers: limit={limit}, offset={offset}, processed_only={processed_only}")
         
-        with get_db() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-
-            query = """
-                SELECT 
-                    id, title, authors, year, venue, abstract, url,
-                    citation_count, summary_zh, investment_insights,
-                    fetched_at, processed
-                FROM papers
-            """
-
-            if processed_only:
-                query += " WHERE processed = 1"
-
-            query += " ORDER BY fetched_at DESC LIMIT ? OFFSET ?"
-
-            cursor.execute(query, (limit, offset))
-            rows = cursor.fetchall()
-
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT 
+                id, title, authors, year, venue, abstract, url,
+                citation_count, summary_zh, investment_insights,
+                fetched_at, processed
+            FROM papers
+        """
+        
+        if processed_only:
+            query += " WHERE processed = 1"
+        
+        query += " ORDER BY fetched_at DESC LIMIT ? OFFSET ?"
+        
+        cursor.execute(query, (limit, offset))
+        rows = cursor.fetchall()
+        conn.close()
+        
         papers = [dict(row) for row in rows]
         logger.info(f"Successfully fetched {len(papers)} papers")
         return papers
@@ -123,18 +105,21 @@ async def get_papers(
 async def get_paper(paper_id: int):
     """Get a single paper by ID"""
     try:
-        with get_db() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT 
-                    id, title, authors, year, venue, abstract, url,
-                    citation_count, summary_zh, investment_insights,
-                    fetched_at, processed
-                FROM papers
-                WHERE id = ?
-            """, (paper_id,))
-            row = cursor.fetchone()
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                id, title, authors, year, venue, abstract, url,
+                citation_count, summary_zh, investment_insights,
+                fetched_at, processed
+            FROM papers
+            WHERE id = ?
+        """, (paper_id,))
+        
+        row = cursor.fetchone()
+        conn.close()
         
         if not row:
             raise HTTPException(status_code=404, detail="Paper not found")
@@ -148,18 +133,29 @@ async def get_paper(paper_id: int):
 async def get_stats():
     """Get statistics about the research database"""
     try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            stats = {}
-            cursor.execute("SELECT COUNT(*) FROM papers")
-            stats["total_papers"] = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM papers WHERE processed = 1")
-            stats["processed_papers"] = cursor.fetchone()[0]
-            cursor.execute("SELECT AVG(citation_count) FROM papers")
-            stats["avg_citations"] = round(cursor.fetchone()[0] or 0, 1)
-            cursor.execute("SELECT MAX(fetched_at) FROM papers")
-            stats["latest_fetch"] = cursor.fetchone()[0]
-            return stats
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        stats = {}
+        
+        # Total papers
+        cursor.execute("SELECT COUNT(*) FROM papers")
+        stats["total_papers"] = cursor.fetchone()[0]
+        
+        # Processed papers
+        cursor.execute("SELECT COUNT(*) FROM papers WHERE processed = 1")
+        stats["processed_papers"] = cursor.fetchone()[0]
+        
+        # Average citations
+        cursor.execute("SELECT AVG(citation_count) FROM papers")
+        stats["avg_citations"] = round(cursor.fetchone()[0] or 0, 1)
+        
+        # Latest paper date
+        cursor.execute("SELECT MAX(fetched_at) FROM papers")
+        stats["latest_fetch"] = cursor.fetchone()[0]
+        
+        conn.close()
+        return stats
         
     except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -215,10 +211,6 @@ async def list_wechat_articles():
                 except:
                     pass
             
-            fallback_title = filename.replace('.html', '')
-            if not title:
-                title = fallback_title
-
             article_list.append({
                 "filename": filename,
                 "date": date,
@@ -229,114 +221,284 @@ async def list_wechat_articles():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing articles: {str(e)}")
 
-class WechatArticle(BaseModel):
-    """Payload for creating articles via API"""
+@router.post("/wechat/generate")
+async def generate_research_paper():
+    """
+    Generate a sample WeChat article with AI research content
+    
+    Creates a formatted HTML article for WeChat with AI/ML research insights
+    
+    Returns:
+        Success response with article details and trace ID
+    """
+    trace_id = str(uuid.uuid4())[:8]
+    research_logger.info(f"[{trace_id}] Generating sample WeChat article")
+    
+    try:
+        from datetime import datetime
+        import random
+        
+        # Create WeChat articles directory if it doesn't exist
+        os.makedirs(WECHAT_PATH, exist_ok=True)
+        
+        # Generate article with timestamp
+        now = datetime.now()
+        date_str = now.strftime("%Y%m%d")
+        time_str = now.strftime("%H%M%S")
+        filename = f"wechat_{date_str}_{time_str}.html"
+        filepath = os.path.join(WECHAT_PATH, filename)
+        
+        # Sample topics
+        topics = [
+            ("Transformer Networks", "深度学习中的Transformer架构革命"),
+            ("Reinforcement Learning", "强化学习在金融投资中的应用"),
+            ("Computer Vision", "计算机视觉技术的最新突破"),
+            ("Natural Language Processing", "自然语言处理的前沿进展"),
+            ("Graph Neural Networks", "图神经网络在推荐系统中的应用"),
+            ("Generative AI", "生成式AI的投资机会分析"),
+            ("Federated Learning", "联邦学习保护隐私的机器学习"),
+            ("Neural Architecture Search", "神经架构搜索自动化机器学习"),
+            ("Few-Shot Learning", "少样本学习在实际场景中的应用"),
+            ("Multimodal Learning", "多模态学习融合视觉与语言")
+        ]
+        
+        topic_en, topic_cn = random.choice(topics)
+        
+        # Generate HTML content
+        html_content = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{topic_cn} - AI研究前沿</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.8;
+            color: #e5e7eb;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #000000;
+        }}
+        .article {{
+            background: linear-gradient(to bottom, #111827, #1f2937);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            border: 1px solid #374151;
+        }}
+        h1 {{
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }}
+        h2 {{
+            color: #e5e7eb;
+            font-size: 22px;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }}
+        .date {{
+            color: #9ca3af;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }}
+        .highlight {{
+            background: linear-gradient(120deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }}
+        .insight {{
+            background: rgba(31, 41, 55, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid #374151;
+        }}
+        .insight h3 {{
+            color: #d1d5db;
+            margin-top: 0;
+        }}
+        p {{
+            color: #d1d5db;
+            margin: 12px 0;
+        }}
+        ul {{
+            color: #d1d5db;
+        }}
+        li {{
+            margin: 8px 0;
+        }}
+        strong {{
+            color: #e5e7eb;
+        }}
+        .tag {{
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin: 5px 5px 5px 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="article">
+        <h1>🔬 {topic_cn}</h1>
+        <div class="date">📅 {now.strftime("%Y年%m月%d日")}</div>
+        
+        <div class="highlight">
+            <strong>核心观点:</strong> {topic_en}技术在人工智能领域取得重大突破，为投资者带来新的机遇。
+        </div>
+        
+        <h2>🎯 技术要点</h2>
+        <p>
+            {topic_en}作为人工智能领域的前沿技术，正在改变我们理解和处理数据的方式。
+            这项技术的核心创新在于其能够高效地处理复杂的数据结构，并从中提取有价值的洞察。
+        </p>
+        
+        <div class="insight">
+            <h3>💡 投资洞察</h3>
+            <ul>
+                <li>技术成熟度: 该技术已进入商业化阶段，多家科技公司正在积极布局</li>
+                <li>市场规模: 预计未来5年市场规模将保持30%以上的年增长率</li>
+                <li>应用场景: 金融、医疗、自动驾驶等领域展现巨大潜力</li>
+            </ul>
+        </div>
+        
+        <h2>📈 市场趋势</h2>
+        <p>
+            根据最新研究报告，{topic_en}技术的应用正在加速渗透到各个行业。
+            头部科技公司纷纷加大研发投入，相关领域的初创公司也获得了大量融资。
+        </p>
+        
+        <div class="highlight">
+            <strong>关键数据:</strong>
+            <ul>
+                <li>全球研发投入增长: 45%</li>
+                <li>相关专利申请数量: 年增长率38%</li>
+                <li>商业化项目落地: 超过100个重大项目</li>
+            </ul>
+        </div>
+        
+        <h2>🚀 未来展望</h2>
+        <p>
+            展望未来，{topic_en}技术将继续演进，为人工智能的发展提供更强大的工具。
+            投资者应密切关注这一领域的技术突破和商业化进展，把握潜在的投资机会。
+        </p>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 14px; text-align: center;">
+            <p>📊 Alpha Research - AI驱动的量化投资平台</p>
+            <div>
+                <span class="tag">人工智能</span>
+                <span class="tag">量化投资</span>
+                <span class="tag">前沿技术</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+        
+        # Write article to file
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        research_logger.info(f"[{trace_id}] Generated article: {filename}")
+        
+        return {
+            "success": True,
+            "message": f"Generated article: {topic_cn}",
+            "filename": filename,
+            "date": date_str,
+            "trace_id": trace_id
+        }
+    
+    except Exception as e:
+        error_msg = f"Error generating article: {str(e)}"
+        error_logger.error(
+            f"[{trace_id}] {error_msg}\n"
+            f"Traceback:\n{traceback.format_exc()}"
+        )
+        raise HTTPException(
+            status_code=500, 
+            detail={
+                "error": error_msg,
+                "trace_id": trace_id,
+                "type": type(e).__name__,
+                "traceback": traceback.format_exc()
+            }
+        )
 
+class NewPaper(BaseModel):
     title: str
     content: str
     url: Optional[str] = None
 
-
-def _ensure_wechat_dir() -> None:
-    os.makedirs(WECHAT_PATH, exist_ok=True)
-
-
-def _build_wechat_filename() -> str:
-    """Generate unique filename for current day with counter suffix."""
-    date_str = datetime.now().strftime("%Y%m%d")
-    base = f"wechat_{date_str}"
-    filename = f"{base}.html"
-    counter = 0
-    while os.path.exists(os.path.join(WECHAT_PATH, filename)):
-        counter += 1
-        filename = f"{base}_{counter}.html"
-    return filename
-
-
-def _write_article_files(filename: str, article: WechatArticle, trace_id: str) -> None:
-    """Write both HTML and markdown representations for an article."""
-    html_path = os.path.join(WECHAT_PATH, filename)
-    md_path = html_path.replace('.html', '.md')
-
-    # Simple HTML content with dark theme for easy preview
-    html_body = f"""
-    <!DOCTYPE html>
-    <html lang=\"zh-CN\">
-    <head><meta charset=\"UTF-8\"><title>{article.title}</title></head>
-    <body>
-        <h1>🔬 {article.title}</h1>
-        <p>{article.content}</p>
-        {f'<p>Source: <a href="{article.url}" target="_blank">{article.url}</a></p>' if article.url else ''}
-        <p>Trace ID: {trace_id}</p>
-    </body>
-    </html>
-    """
-
-    md_content_lines = [f"# 🔬 {article.title}", "", article.content]
-    if article.url:
-        md_content_lines.append(f"Source: {article.url}")
-    md_content_lines.append(f"Trace ID: {trace_id}")
-    md_content = "\n".join(md_content_lines)
-
-    with open(html_path, 'w', encoding='utf-8') as html_file:
-        html_file.write(html_body)
-    with open(md_path, 'w', encoding='utf-8') as md_file:
-        md_file.write(md_content)
-
-
 @router.post("/wechat/create")
-async def create_wechat_article(article: WechatArticle):
-    """Create a new WeChat research article with unique filename."""
-    trace_id = str(uuid.uuid4())[:8]
-    _safe_log(research_logger.info, f"[{trace_id}] Creating WeChat article: {article.title}")
-
+async def create_wechat_article(paper: NewPaper):
+    """Create a new WeChat research article"""
     try:
-        _ensure_wechat_dir()
-        filename = _build_wechat_filename()
-        _write_article_files(filename, article, trace_id)
+        # Ensure directory exists
+        os.makedirs(WECHAT_PATH, exist_ok=True)
+        
+        # Generate filename with today's date
+        from datetime import datetime
+        today = datetime.now().strftime("%Y%m%d")
+        
+        # Check if file already exists for today
+        base_filename = f"wechat_{today}"
+        counter = 1
+        filename = base_filename
+        while os.path.exists(os.path.join(WECHAT_PATH, f"{filename}.md")):
+            filename = f"{base_filename}_{counter}"
+            counter += 1
+        
+        md_filename = f"{filename}.md"
+        md_filepath = os.path.join(WECHAT_PATH, md_filename)
+        
+        # Create markdown content
+        md_content = f"""# 🔬 {paper.title}
 
+> **发布日期**: {datetime.now().strftime("%Y-%m-%d")}  
+> **来源**: 手动添加
+"""
+        
+        if paper.url:
+            md_content += f"> **论文链接**: [{paper.url}]({paper.url})\n"
+        
+        md_content += f"""
+
+---
+
+## 📄 研究内容
+
+{paper.content}
+
+---
+
+## 📊 总结
+
+手动添加的研究论文分析。
+"""
+        
+        # Write markdown file
+        with open(md_filepath, 'w', encoding='utf-8') as f:
+            f.write(md_content)
+        
         return {
             "success": True,
-            "filename": filename,
-            "trace_id": trace_id
+            "filename": f"{filename}.html",
+            "message": f"Article created: {md_filename}"
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        _safe_log(research_logger.error, f"[{trace_id}] Error creating article: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating article: {str(e)}")
-
-
-@router.post("/wechat/generate")
-async def generate_research_paper():
-    """Generate a sample WeChat article using local template; always returns success unless IO fails."""
-    trace_id = str(uuid.uuid4())[:8]
-    _safe_log(research_logger.info, f"[{trace_id}] Generating WeChat article (local template)")
-
-    try:
-        _ensure_wechat_dir()
-        filename = _build_wechat_filename()
-        article = WechatArticle(
-            title="AI Research Daily",
-            content="Automated research summary generated for testing and preview purposes.",
-            url="https://alpha-research"
-        )
-        _write_article_files(filename, article, trace_id)
-
-        _safe_log(research_logger.info, f"[{trace_id}] Successfully generated article: {filename}")
-        return {
-            "success": True,
-            "filename": filename,
-            "trace_id": trace_id
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        _safe_log(research_logger.error, f"[{trace_id}] Failed to generate article: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"trace_id": trace_id, "error": str(e)}
-        )
 
 @router.delete("/wechat/{filename}")
 async def delete_wechat_article(filename: str):
@@ -382,30 +544,42 @@ async def get_wechat_article(filename: str):
         md_filename = filename.replace('.html', '.md')
         md_filepath = os.path.join(WECHAT_PATH, md_filename)
         
-        md_content = None
         if os.path.exists(md_filepath):
-            try:
-                with open(md_filepath, 'r', encoding='utf-8') as f:
-                    md_content = f.read()
-            except Exception:
-                md_content = None
-
-        if md_content is not None:
+            # Read markdown
+            with open(md_filepath, 'r', encoding='utf-8') as f:
+                md_content = f.read()
+            
+            # Extract title for HTML
             import re
             title_match = re.search(r'# 🔬 (.+)', md_content)
             title = title_match.group(1) if title_match else 'AI Research'
-
+            
+            # Preserve markdown formatting but make it HTML-safe and styled
+            # Convert to HTML while keeping it readable
             html_content = md_content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            
+            # Convert markdown syntax to HTML for display
             html_content = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html_content, flags=re.MULTILINE)
             html_content = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html_content, flags=re.MULTILINE)
             html_content = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html_content, flags=re.MULTILINE)
             html_content = re.sub(r'^#### (.+)$', r'<h4>\1</h4>', html_content, flags=re.MULTILINE)
+            
+            # Bold text
             html_content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html_content)
+            
+            # Blockquotes
             html_content = re.sub(r'^&gt; (.+)$', r'<div class="meta-line">\1</div>', html_content, flags=re.MULTILINE)
+            
+            # Links
             html_content = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" target="_blank">\1</a>', html_content)
+            
+            # Horizontal rules
             html_content = re.sub(r'^---$', r'<hr/>', html_content, flags=re.MULTILINE)
+            
+            # Lists
             html_content = re.sub(r'^- (.+)$', r'<div class="list-item">• \1</div>', html_content, flags=re.MULTILINE)
-
+            
+            # Paragraphs - wrap non-tagged lines
             lines = html_content.split('\n')
             processed = []
             for line in lines:
@@ -416,8 +590,10 @@ async def get_wechat_article(filename: str):
                     processed.append(stripped)
                 else:
                     processed.append('<br/>')
-
+            
             html_body = '\n'.join(processed)
+            
+            # Create clean HTML with dark theme
             content = f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -530,10 +706,13 @@ async def get_wechat_article(filename: str):
     </div>
 </body>
 </html>'''
-        if md_content is None:
+        else:
+            # Fallback to HTML file if markdown doesn't exist
             filepath = os.path.join(WECHAT_PATH, filename)
+            
             if not os.path.exists(filepath):
                 raise HTTPException(status_code=404, detail="Article not found")
+            
             with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read()
         
@@ -766,8 +945,7 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
                 }
             )
         
-        _safe_log(
-            research_logger.info,
+        research_logger.info(
             f"[{trace_id}] Custom theme search requested: "
             f"theme='{request.theme}', max_results={max_results}, source={request.source}"
         )
@@ -791,7 +969,7 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
                 }
             )
         
-        _safe_log(research_logger.info, f"[{trace_id}] Executing search script: {script_path}")
+        research_logger.info(f"[{trace_id}] Executing search script: {script_path}")
         
         # Determine Python executable - use research-tracker's venv if available
         research_tracker_path = os.path.join(
@@ -801,7 +979,7 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
         venv_python = os.path.join(research_tracker_path, "venv", "bin", "python")
         python_cmd = venv_python if os.path.exists(venv_python) else "python3"
         
-        _safe_log(research_logger.info, f"[{trace_id}] Using Python: {python_cmd}")
+        research_logger.info(f"[{trace_id}] Using Python: {python_cmd}")
         
         # Execute search script
         try:
@@ -820,8 +998,7 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
                 cwd=os.path.dirname(script_path)
             )
             
-            _safe_log(
-                research_logger.info,
+            research_logger.info(
                 f"[{trace_id}] Search script completed with exit code: {result.returncode}"
             )
             
@@ -846,7 +1023,7 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
             import json
             try:
                 papers = json.loads(result.stdout)
-                _safe_log(research_logger.info, f"[{trace_id}] Found {len(papers)} papers for theme '{request.theme}'")
+                research_logger.info(f"[{trace_id}] Found {len(papers)} papers for theme '{request.theme}'")
                 
                 return ThemeSearchResponse(
                     success=True,
@@ -899,12 +1076,4 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
                 "trace_id": trace_id
             }
         )
-
-
-@router.post("/theme-search", response_model=ThemeSearchResponse)
-async def theme_search(request: ThemeSearchRequest):
-    """Alias route for theme search with max_results capped at 100."""
-    capped = min(request.max_results or 10, 100)
-    adjusted = ThemeSearchRequest(**{**request.dict(), "max_results": capped})
-    return await search_papers_by_theme(adjusted)
 

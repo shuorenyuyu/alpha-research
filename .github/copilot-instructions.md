@@ -126,37 +126,114 @@ class FutuFetcher:
         # Implementation with tests
 ```
 
-### 7. Git Workflow
+### 7. Git Workflow & Remote Deployment
+**CRITICAL**: After making ANY code changes, you MUST deploy to the remote server and test there.
+
+**Standard Deployment Workflow**:
+```bash
+# 1. Make changes locally and test
+# 2. Deploy to remote server immediately
+rsync -avz --exclude 'venv' --exclude '__pycache__' --exclude '.git' \
+  --exclude 'dashboard/node_modules' --exclude 'dashboard/.next' --exclude 'data' \
+  . research-azure:~/alpha-research/
+
+# 3. Restart affected services
+ssh research-azure 'cd ~/alpha-research && pm2 restart alpha-backend'
+# OR for frontend changes:
+ssh research-azure 'cd ~/alpha-research/dashboard && npm run build && pm2 restart alpha-frontend'
+
+# 4. Verify deployment
+ssh research-azure 'pm2 logs alpha-backend --lines 15 --nostream'
+```
+
+**Quick Deploy Commands**:
+```bash
+# Backend only
+rsync -avz api/ research-azure:~/alpha-research/api/ && \
+  ssh research-azure 'pm2 restart alpha-backend'
+
+# Frontend only
+rsync -avz --exclude 'node_modules' --exclude '.next' dashboard/ \
+  research-azure:~/alpha-research/dashboard/ && \
+  ssh research-azure 'cd ~/alpha-research/dashboard && npm run build && pm2 restart alpha-frontend'
+
+# Single file
+rsync -avz api/routes/research.py research-azure:~/alpha-research/api/routes/ && \
+  ssh research-azure 'pm2 restart alpha-backend'
+```
+
 **Commit Message Format**:
 ```
 feat: add Futu API integration for portfolio tracking
 fix: resolve cache timeout issue in yfinance fetcher
 test: add 99% coverage for market data module
 docs: update API documentation for new endpoints
+deploy: update dark theme for research articles
 ```
 
 **Before Committing**:
 1. Run tests: `pytest --cov=. --cov-report=json`
 2. Check coverage: Must be ≥99%
 3. Run linter: `black . && flake8 .`
-4. Update documentation if needed
+4. **Deploy to remote**: Use rsync + pm2 restart
+5. **Test on production**: Verify endpoints work on http://alpha-research.southeastasia.cloudapp.azure.com
+6. Update documentation if needed
 
 ### 8. Deployment & Production
-- **Environment Variables**: Never commit secrets, use `.env` files
-- **Docker**: Update Dockerfile if dependencies change
-- **PM2**: Restart services after deployment
-- **Monitoring**: Check logs after deployment (`pm2 logs`)
+**MANDATORY**: Always deploy changes to the remote server immediately after making them.
 
-**Deployment Checklist**:
+**Remote Server Details**:
+- **Host**: wobbler@57.155.1.26 (Southeast Asia Azure VM)
+- **SSH Alias**: `research-azure`
+- **Project Path**: `/home/wobbler/alpha-research`
+- **Frontend URL**: http://alpha-research.southeastasia.cloudapp.azure.com
+- **Backend URL**: http://57.155.1.26:8001 (internal only, proxied through nginx)
+
+**PM2 Process Management**:
 ```bash
-# 1. Update server
-ssh research-azure
-cd ~/alpha-research && git pull
+# View all processes
+ssh research-azure 'pm2 list'
 
-# 2. Backend
-source venv/bin/activate
-pip install -r requirements.txt
-pytest --cov=. --cov-report=json  # Verify 99% coverage
+# View logs
+ssh research-azure 'pm2 logs alpha-backend --lines 20'
+ssh research-azure 'pm2 logs alpha-frontend --lines 20'
+
+# Restart services
+ssh research-azure 'pm2 restart alpha-backend'
+ssh research-azure 'pm2 restart alpha-frontend'
+ssh research-azure 'pm2 restart all'
+
+# Check status
+ssh research-azure 'pm2 status'
+```
+
+**Environment Variables**: Never commit secrets, use `.env` files
+**Docker**: Update Dockerfile if dependencies change
+**Monitoring**: Always check logs after deployment
+
+**Full Deployment Checklist**:
+```bash
+# 1. Deploy code to server
+rsync -avz --exclude 'venv' --exclude '__pycache__' --exclude '.git' \
+  --exclude 'dashboard/node_modules' --exclude 'dashboard/.next' --exclude 'data' \
+  . research-azure:~/alpha-research/
+
+# 2. Backend updates (if applicable)
+ssh research-azure 'cd ~/alpha-research && source venv/bin/activate && \
+  pip install -r requirements.txt && pm2 restart alpha-backend'
+
+# 3. Frontend updates (if applicable)
+ssh research-azure 'cd ~/alpha-research/dashboard && npm install && \
+  npm run build && pm2 restart alpha-frontend'
+
+# 4. Verify deployment
+ssh research-azure 'pm2 logs --lines 15 --nostream'
+curl -I http://alpha-research.southeastasia.cloudapp.azure.com
+
+# 5. Test API endpoints
+curl http://alpha-research.southeastasia.cloudapp.azure.com/api/research/wechat/list
+curl http://alpha-research.southeastasia.cloudapp.azure.com/api/market/quotes?symbols=AAPL
+```
 
 # 3. Frontend
 cd dashboard && npm install && npm run build

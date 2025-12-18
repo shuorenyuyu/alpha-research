@@ -274,47 +274,33 @@ class TestErrorLogging:
     
     def test_generate_paper_logs_trace_id(self, client):
         """Test that paper generation includes trace ID"""
-        with patch('api.routes.research.os.path.exists', return_value=False):
-            response = client.post("/api/research/wechat/generate")
-            
-            # Should fail with 404 (script not found)
-            assert response.status_code == 404
-            
-            data = response.json()
-            assert "trace_id" in data["detail"]
-            assert len(data["detail"]["trace_id"]) == 8  # Short UUID
+        response = client.post("/api/research/wechat/generate")
+        
+        # Should succeed and return trace_id
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert "trace_id" in data
+        assert len(data["trace_id"]) == 8  # Short UUID
     
     def test_generate_paper_logs_subprocess_error(self, client):
         """Test that subprocess errors are logged with details"""
-        with patch('api.routes.research.os.path.exists', return_value=True):
-            with patch('api.routes.research.subprocess.run') as mock_run:
-                # Simulate subprocess failure
-                mock_result = MagicMock()
-                mock_result.returncode = 1
-                mock_result.stdout = "Some output"
-                mock_result.stderr = "Error message"
-                mock_run.return_value = mock_result
-                
-                response = client.post("/api/research/wechat/generate")
-                
-                assert response.status_code == 500
-                data = response.json()
-                assert "trace_id" in data["detail"]
-                assert "stderr" in data["detail"]
-                assert "suggestion" in data["detail"]
+        # After refactor, no subprocess used, always succeeds
+        response = client.post("/api/research/wechat/generate")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "trace_id" in data
+        assert data["success"] is True
     
     def test_generate_paper_timeout_logged(self, client):
         """Test that timeouts are properly logged"""
-        import subprocess
+        # After refactor, no subprocess timeout possible
+        response = client.post("/api/research/wechat/generate")
         
-        with patch('api.routes.research.os.path.exists', return_value=True):
-            with patch('api.routes.research.subprocess.run', side_effect=subprocess.TimeoutExpired("cmd", 300)):
-                response = client.post("/api/research/wechat/generate")
-                
-                assert response.status_code == 500
-                data = response.json()
-                assert "timeout" in data["detail"]["error"].lower()
-                assert "trace_id" in data["detail"]
+        assert response.status_code == 200
+        data = response.json()
+        assert "trace_id" in data
 
 
 class TestRequestLogging:

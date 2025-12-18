@@ -34,8 +34,8 @@ export default function ResearchPage() {
   useEffect(() => {
     const fetchArticles = async () => {
       try {
-        console.log('Fetching articles from /api/wechat-list-proxy');
-        const response = await fetch('/api/wechat-list-proxy', {
+        console.log('Fetching articles from /api/research/wechat/list');
+        const response = await fetch('/api/research/wechat/list', {
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache'
@@ -71,7 +71,7 @@ export default function ResearchPage() {
 
     setGenerating(true);
     try {
-      const response = await fetch('/api/wechat-generate-proxy', {
+      const response = await fetch('/api/research/wechat/generate', {
         method: 'POST',
       });
 
@@ -122,7 +122,7 @@ export default function ResearchPage() {
     }
     
     try {
-      const response = await fetch(`/api/wechat-delete-proxy?filename=${filename}`, {
+      const response = await fetch(`/api/research/wechat/${filename}`, {
         method: 'DELETE'
       });
       
@@ -149,7 +149,7 @@ export default function ResearchPage() {
     setSearchResults([]);
     
     try {
-      const response = await fetch('/api/theme-search-proxy', {
+      const response = await fetch('/api/research/search/theme', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -228,7 +228,7 @@ export default function ResearchPage() {
           </button>
         </div>
         <iframe
-          src={`/api/wechat-article-proxy?filename=${selectedArticle}`}
+          src={`/api/research/wechat/${selectedArticle}`}
           className="w-full"
           style={{ height: 'calc(100vh - 57px)' }}
           title="Research Article"

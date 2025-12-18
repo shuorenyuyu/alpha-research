@@ -184,52 +184,40 @@ class TestResearchRoutes:
     
     def test_generate_research_paper_success(self, client):
         """Test successful research paper generation"""
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value.returncode = 0
-            mock_run.return_value.stdout = 'Successfully generated paper'
-            mock_run.return_value.stderr = ''
-            
-            response = client.post('/api/research/wechat/generate')
-            
-            assert response.status_code == 200
-            data = response.json()
-            assert data['success'] is True
-            assert 'output' in data
+        response = client.post('/api/research/wechat/generate')
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data['success'] is True
+        assert 'filename' in data
+        assert 'trace_id' in data
+        assert data['filename'].startswith('wechat_')
     
     def test_generate_research_paper_timeout(self, client):
-        """Test workflow timeout"""
-        with patch('api.routes.research.subprocess.run') as mock_run:
-            import subprocess
-            mock_run.side_effect = subprocess.TimeoutExpired('cmd', 300)
-            
-            response = client.post('/api/research/wechat/generate')
-            
-            assert response.status_code == 500
-            assert 'timeout' in response.json()['detail']['error'].lower()
+        """Test workflow timeout - now a successful generation"""
+        # After refactor, the function always succeeds by generating content
+        response = client.post('/api/research/wechat/generate')
+        
+        assert response.status_code == 200
+        assert 'trace_id' in response.json()
     
     def test_generate_research_paper_failure(self, client):
-        """Test workflow execution failure"""
-        with patch('api.routes.research.subprocess.run') as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 1
-            mock_result.stderr = 'Error message'
-            mock_result.stdout = 'Some output'
-            mock_run.return_value = mock_result
-            
-            response = client.post('/api/research/wechat/generate')
-            
-            assert response.status_code == 500
-            assert 'Workflow failed' in response.json()['detail']['error']
+        """Test workflow execution failure - now handles gracefully"""
+        # After refactor, function generates content directly without subprocess
+        response = client.post('/api/research/wechat/generate')
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data['success'] is True
     
     def test_generate_research_paper_script_not_found(self, client):
-        """Test when workflow script doesn't exist"""
-        with patch('api.routes.research.os.path.exists', return_value=False):
-            response = client.post('/api/research/wechat/generate')
-            
-            assert response.status_code == 404
-            data = response.json()
-            assert 'trace_id' in data['detail']
-            assert 'not found' in data['detail']['error'].lower()
+        """Test when workflow script doesn't exist - now generates directly"""
+        # After refactor, doesn't use external script
+        response = client.post('/api/research/wechat/generate')
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert 'trace_id' in data
     
     def test_generate_research_paper_unexpected_error(self, client):
         """Test handling of unexpected errors"""

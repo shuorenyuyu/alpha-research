@@ -33,6 +33,20 @@ class HistoricalData(BaseModel):
     volume: int
     adjClose: float
 
+class StockMetrics(BaseModel):
+    symbol: str
+    company: str
+    currentPrice: float
+    predictabilityRank: Optional[float] = None
+    marketCap: Optional[int] = None
+    ebitdaGrowth10Y: Optional[float] = None
+    ebitdaGrowth5Y: Optional[float] = None
+    ebitdaGrowth1Y: Optional[float] = None
+    peRatio: Optional[float] = None
+    pegRatio: Optional[float] = None
+    pbRatio: Optional[float] = None
+    dividendYield: Optional[float] = None
+
 @router.get("/quote/{symbol}", response_model=StockQuote)
 async def get_stock_quote(symbol: str):
     """
@@ -88,3 +102,13 @@ async def get_trending_stocks():
     Get trending/popular stocks
     """
     return market_fetcher.get_trending_stocks()
+
+@router.get("/metrics/{symbol}", response_model=StockMetrics)
+async def get_stock_metrics(symbol: str):
+    """
+    Get fundamental metrics for a stock symbol to support value screens.
+    """
+    metrics = market_fetcher.get_metrics(symbol)
+    if not metrics:
+        raise HTTPException(status_code=404, detail=f"Metrics unavailable for symbol '{symbol}'")
+    return metrics

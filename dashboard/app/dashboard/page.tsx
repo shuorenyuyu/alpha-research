@@ -2,52 +2,96 @@
 
 import { useState, useEffect } from "react";
 
-interface StockData {
+type StrategyType = "warren-buffett" | "li-lu" | "duan-yongping" | "market-cap-screener";
+
+interface HoldingData {
   symbol: string;
   name: string;
-  price: number;
-  change: number;
-  changePercent: number;
+  buy_date?: string;
+  buy_price?: number;
+  current_price: number;
+  weight?: number;
+  allocation?: number;
+  gain_loss?: number;
+  return_pct?: number;
+  multiple?: number;
+  holding_period_years?: number;
+  notes?: string;
+  // For Buffett-Munger
+  pe_ratio?: number;
+  roe?: number;
+  market_cap?: number;
+}
+
+interface PortfolioData {
+  stocks: HoldingData[];
+  total_stocks: number;
+  strategy: string;
+  description?: string;
+  // Buffett-Munger specific
+  last_rebalance?: string;
+  next_rebalance?: string;
+  days_until_rebalance?: number;
+  avg_pe?: number;
+  avg_roe?: number;
+  allocation_per_stock?: number;
+  // Li Lu / Duan Yongping specific
+  weighted_avg_return?: number;
+  avg_holding_years?: number;
+  winners?: number;
+  losers?: number;
+  best_performer?: {
+    symbol: string;
+    return: number;
+    multiple: number;
+  };
+  philosophy?: string;
 }
 
 export default function DashboardPage() {
-  const [stocks, setStocks] = useState<StockData[]>([]);
+  const [activeStrategy, setActiveStrategy] = useState<StrategyType>("warren-buffett");
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchStocks = async () => {
+    const fetchPortfolio = async () => {
+      setLoading(true);
+      setError(null);
+      
       try {
-        const symbols = ['NVDA', 'MSFT', 'GOOGL', 'TSLA', 'AAPL'];
-        const response = await fetch(`/api/market-proxy?symbols=${symbols.join(',')}`);
+        const response = await fetch(`/api/portfolio/${activeStrategy}`);
         
         if (response.ok) {
-          const data = await response.json();
-          setStocks(data);
+          const data: PortfolioData = await response.json();
+          setPortfolio(data);
         } else {
-          setError('Failed to fetch stock data');
+          setError(`Failed to fetch ${activeStrategy} portfolio`);
         }
       } catch (err) {
-        setError('Error loading stock data');
-        console.error('Error fetching stocks:', err);
+        setError('Error loading portfolio');
+        console.error('Error fetching portfolio:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStocks();
-    
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchStocks, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+    fetchPortfolio();
+  }, [activeStrategy]);
+
+  const strategyTabs = [
+    { id: "warren-buffett" as StrategyType, name: "Warren Buffett", icon: "🐐" },
+    { id: "li-lu" as StrategyType, name: "Li Lu 李录", icon: "🏔️" },
+    { id: "duan-yongping" as StrategyType, name: "Duan Yongping 段永平", icon: "🍎" },
+    { id: "market-cap-screener" as StrategyType, name: "Market Cap Top 25", icon: "🎯" },
+  ];
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-400">Loading real-time market data...</p>
+          <p className="mt-4 text-gray-400">Loading portfolio...</p>
         </div>
       </div>
     );
@@ -60,7 +104,7 @@ export default function DashboardPage() {
           <p className="text-2xl text-red-400">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition"
           >
             Retry
           </button>
@@ -70,95 +114,224 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-4xl font-bold text-white mb-2">📊 Market Dashboard</h1>
-        <p className="text-gray-400 mb-8">Real-time data from Yahoo Finance • Auto-refresh every 5 minutes</p>
-      
-      {/* Market Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg shadow-md p-6">
-          <h3 className="text-sm text-gray-400 mb-2">Tracked Stocks</h3>
-          <p className="text-3xl font-bold text-white">{stocks.length}</p>
-          <p className="text-sm text-gray-400 mt-1">Active positions</p>
+    <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 text-white p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">Investment Portfolios</h1>
+          <p className="text-gray-400">Track legendary investors' strategies and holdings</p>
         </div>
-        
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg shadow-md p-6">
-          <h3 className="text-sm text-gray-400 mb-2">Total Market Value</h3>
-          <p className="text-3xl font-bold text-white">
-            ${stocks.reduce((sum, s) => sum + s.price, 0).toFixed(2)}
-          </p>
-          <p className="text-sm text-gray-400 mt-1">Combined price</p>
-        </div>
-        
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg shadow-md p-6">
-          <h3 className="text-sm text-gray-400 mb-2">Avg Change Today</h3>
-          <p className={`text-3xl font-bold ${
-            stocks.reduce((sum, s) => sum + s.changePercent, 0) / stocks.length >= 0 
-              ? 'text-green-400' 
-              : 'text-red-400'
-          }`}>
-            {(stocks.reduce((sum, s) => sum + s.changePercent, 0) / stocks.length).toFixed(2)}%
-          </p>
-          <p className="text-sm text-gray-400 mt-1">Average performance</p>
-        </div>
-      </div>
 
-      {/* Stock List */}
-      <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg shadow-md overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-700">
-          <thead className="bg-gray-900/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Symbol
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Company
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Price
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Change
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Change %
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-700">
-            {stocks.map((stock) => (
-              <tr key={stock.symbol} className="hover:bg-gray-700/30 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-bold text-white">{stock.symbol}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-300">{stock.name}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-white font-semibold">${stock.price.toFixed(2)}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className={`text-sm font-medium ${
-                    stock.change >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    stock.changePercent >= 0 
-                      ? 'bg-green-900/50 text-green-400' 
-                      : 'bg-red-900/50 text-red-400'
-                  }`}>
-                    {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {/* Strategy Tabs */}
+        <div className="flex space-x-4 mb-8 border-b border-gray-700">
+          {strategyTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveStrategy(tab.id)}
+              className={`px-6 py-3 font-semibold transition-all ${
+                activeStrategy === tab.id
+                  ? "text-blue-400 border-b-2 border-blue-400"
+                  : "text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              <span className="mr-2">{tab.icon}</span>
+              {tab.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Portfolio Content */}
+        {portfolio && (
+          <>
+            {/* Strategy Header */}
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-6 mb-6 border border-gray-700">
+              <h2 className="text-2xl font-bold mb-2">{portfolio.strategy}</h2>
+              <p className="text-gray-400">{portfolio.description || portfolio.philosophy}</p>
+            </div>
+
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <MetricCard
+                title="Total Holdings"
+                value={portfolio.total_stocks.toString()}
+                icon="📊"
+              />
+              
+              {activeStrategy === "market-cap-screener" && portfolio.avg_pe && (
+                <>
+                  <MetricCard
+                    title="Avg P/E Ratio"
+                    value={portfolio.avg_pe.toFixed(2)}
+                    icon="💰"
+                  />
+                  <MetricCard
+                    title="Avg ROE"
+                    value={`${portfolio.avg_roe?.toFixed(2)}%`}
+                    icon="📈"
+                  />
+                  <MetricCard
+                    title="Next Rebalance"
+                    value={`${portfolio.days_until_rebalance} days`}
+                    icon="📅"
+                  />
+                </>
+              )}
+              
+              {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                <>
+                  <MetricCard
+                    title="Avg Return"
+                    value={`${portfolio.weighted_avg_return?.toFixed(1)}%`}
+                    icon="💎"
+                    isPositive={(portfolio.weighted_avg_return || 0) > 0}
+                  />
+                  <MetricCard
+                    title="Avg Holding"
+                    value={`${portfolio.avg_holding_years?.toFixed(1)} years`}
+                    icon="⏳"
+                  />
+                  <MetricCard
+                    title="Win Rate"
+                    value={`${portfolio.winners}/${portfolio.total_stocks}`}
+                    icon="🎯"
+                  />
+                </>
+              )}
+            </div>
+
+            {/* Holdings Table */}
+            <div className="bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
+              <div className="p-6">
+                <h3 className="text-xl font-semibold mb-4">Holdings</h3>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-700 text-left">
+                        <th className="pb-3 px-4">Symbol</th>
+                        <th className="pb-3 px-4">Company</th>
+                        {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                          <>
+                            <th className="pb-3 px-4 text-right">Buy Date</th>
+                            <th className="pb-3 px-4 text-right">Buy Price</th>
+                          </>
+                        )}
+                        <th className="pb-3 px-4 text-right">Current Price</th>
+                        <th className="pb-3 px-4 text-right">Weight</th>
+                        {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                          <>
+                            <th className="pb-3 px-4 text-right">Return</th>
+                            {(activeStrategy === "warren-buffett" || activeStrategy === "duan-yongping") && (
+                              <th className="pb-3 px-4 text-right">Multiple</th>
+                            )}
+                            <th className="pb-3 px-4 text-right">Years</th>
+                          </>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {portfolio.stocks.map((stock, index) => (
+                        <tr
+                          key={stock.symbol}
+                          className={`border-b border-gray-800 hover:bg-gray-800 transition ${
+                            index < 10 ? "" : "hidden md:table-row"
+                          }`}
+                        >
+                          <td className="py-4 px-4">
+                            <span className="font-mono font-semibold text-blue-400">
+                              {stock.symbol}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-gray-300">{stock.name}</td>
+                          
+                          {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                            <>
+                              <td className="py-4 px-4 text-right text-gray-400 text-sm">
+                                {stock.buy_date}
+                              </td>
+                              <td className="py-4 px-4 text-right text-gray-400">
+                                ${stock.buy_price?.toFixed(2)}
+                              </td>
+                            </>
+                          )}
+                          
+                          <td className="py-4 px-4 text-right font-semibold">
+                            ${stock.current_price.toFixed(2)}
+                          </td>
+                          
+                          <td className="py-4 px-4 text-right">
+                            <span className="px-2 py-1 bg-blue-900 text-blue-300 rounded text-sm">
+                              {stock.weight ? stock.weight : `${stock.allocation?.toFixed(1)}%`}
+                            </span>
+                          </td>
+                          
+                          {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                            <>
+                              <td className="py-4 px-4 text-right">
+                                <span className={stock.return_pct && stock.return_pct > 0 ? "text-green-400" : "text-red-400"}>
+                                  {stock.return_pct?.toFixed(1)}%
+                                </span>
+                              </td>
+                              
+                              {(activeStrategy === "warren-buffett" || activeStrategy === "duan-yongping") && (
+                                <td className="py-4 px-4 text-right font-semibold text-green-400">
+                                  {stock.multiple?.toFixed(1)}x
+                                </td>
+                              )}
+                              
+                              <td className="py-4 px-4 text-right text-gray-400 text-sm">
+                                {stock.holding_period_years?.toFixed(1)}
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Best Performer Card (for Li Lu & Duan Yongping) */}
+            {portfolio.best_performer && (
+              <div className="mt-6 bg-gradient-to-r from-green-900 to-green-800 rounded-xl p-6 border border-green-700">
+                <h3 className="text-xl font-semibold mb-2">🏆 Best Performer</h3>
+                <p className="text-2xl font-bold">
+                  {portfolio.best_performer.symbol} - {portfolio.best_performer.return.toFixed(1)}% 
+                  ({portfolio.best_performer.multiple.toFixed(1)}x)
+                </p>
+              </div>
+            )}
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+function MetricCard({ 
+  title, 
+  value, 
+  icon, 
+  isPositive 
+}: { 
+  title: string; 
+  value: string; 
+  icon: string; 
+  isPositive?: boolean;
+}) {
+  return (
+    <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-6 border border-gray-700">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-gray-400 text-sm">{title}</span>
+        <span className="text-2xl">{icon}</span>
+      </div>
+      <div className={`text-2xl font-bold ${
+        isPositive !== undefined 
+          ? isPositive ? "text-green-400" : "text-red-400"
+          : "text-white"
+      }`}>
+        {value}
       </div>
     </div>
   );

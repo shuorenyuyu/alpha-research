@@ -218,3 +218,51 @@ class TestMarketDataFetcher:
             result = fetcher.get_quote('TEST')
             
             assert result['changePercent'] == 0.00
+
+    def test_get_metrics_success(self):
+        """Test retrieving metrics with EBITDA growth and ratios"""
+        income_df = pd.DataFrame({
+            '2020': [1_000_000_000],
+            '2021': [1_100_000_000],
+            '2022': [1_320_000_000],
+        }, index=['EBITDA'])
+        mock_ticker = Mock()
+        mock_ticker.info = {
+            'currentPrice': 50.5,
+            'longName': 'Example Corp',
+            'marketCap': 1_500_000_000,
+            'trailingPE': 10.1,
+            'pegRatio': 1.2,
+            'priceToBook': 2.5,
+            'dividendYield': 0.015,
+            'overallRisk': 3
+        }
+        mock_ticker.get_income_stmt = Mock(return_value=income_df)
+
+        with patch('yfinance.Ticker', return_value=mock_ticker):
+            fetcher = MarketDataFetcher()
+            metrics = fetcher.get_metrics('exm')
+
+        assert metrics['symbol'] == 'EXM'
+        assert metrics['company'] == 'Example Corp'
+        assert metrics['currentPrice'] == 50.5
+        assert metrics['marketCap'] == 1_500_000_000
+        assert metrics['peRatio'] == 10.1
+        assert metrics['pegRatio'] == 1.2
+        assert metrics['pbRatio'] == 2.5
+        assert metrics['dividendYield'] == 1.5
+        # CAGR using 2020->2022 values
+        assert metrics['ebitdaGrowth1Y'] == 20.0
+        assert metrics['ebitdaGrowth5Y'] is not None
+
+    def test_get_metrics_insufficient_data(self):
+        """Test metrics returns None when price missing"""
+        mock_ticker = Mock()
+        mock_ticker.info = {}
+        mock_ticker.get_income_stmt = Mock(return_value=pd.DataFrame())
+
+        with patch('yfinance.Ticker', return_value=mock_ticker):
+            fetcher = MarketDataFetcher()
+            metrics = fetcher.get_metrics('bad')
+
+        assert metrics is None
