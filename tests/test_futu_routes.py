@@ -80,13 +80,13 @@ class TestFutuRoutes:
         assert 'detail' in response.json()
     
     def test_get_account_info_success(self, client, mock_fetcher):
-        """Test successful account info retrieval"""
+        """Test account info retrieval"""
         mock_fetcher.get_account_info.return_value = {
             'totalAssets': 100000.0,
             'cash': 50000.0,
             'marketValue': 50000.0,
-            'profitLoss': 5000.0,
-            'profitLossPercent': 5.26,
+            'frozenCash': 0.0,
+            'availableFunds': 50000.0,
             'currency': 'HKD',
             'updateTime': '2023-12-11 10:30:00'
         }
@@ -115,7 +115,12 @@ class TestFutuRoutes:
             'change': 5.0,
             'changePercent': 1.41,
             'volume': 15000000,
-            'updateTime': '2023-12-11 16:00:00'
+            'turnover': 21600000.0,
+            'high': 365.0,
+            'low': 355.0,
+            'open': 358.0,
+            'previousClose': 355.0,
+            'timestamp': '2023-12-11 16:00:00'
         }
         
         response = client.get('/api/futu/quote/HK.00700')
@@ -241,6 +246,7 @@ class TestFutuFetcher:
     
     def test_get_account_info_success(self, mock_trade_ctx):
         """Test getting account info"""
+        from market.fetchers.futu_fetcher import FutuFetcher
         import pandas as pd
         
         mock_ctx = MagicMock()

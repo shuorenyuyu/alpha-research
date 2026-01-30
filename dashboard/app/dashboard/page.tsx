@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import LivePortfolioToggle from "@/components/LivePortfolioToggle";
 
 type StrategyType = "warren-buffett" | "li-lu" | "duan-yongping" | "market-cap-screener";
 
@@ -199,10 +200,25 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Holdings Table */}
-            <div className="bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
-              <div className="p-6">
-                <h3 className="text-xl font-semibold mb-4">Holdings</h3>
+            {/* Live Portfolio Toggle for Warren Buffett and Li Lu */}
+            {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu") ? (
+              <LivePortfolioToggle 
+                investor={activeStrategy}
+                historicalData={{
+                  stocks: portfolio.stocks as any,
+                  weighted_avg_return: portfolio.weighted_avg_return || 0,
+                  avg_holding_years: portfolio.avg_holding_years || 0,
+                  winners: portfolio.winners || 0,
+                  losers: portfolio.losers || 0,
+                  best_performer: portfolio.best_performer
+                }}
+              />
+            ) : (
+              <>
+                {/* Holdings Table for other strategies (Market Cap and Duan Yongping) */}
+                <div className="bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
+                  <div className="p-6">
+                    <h3 className="text-xl font-semibold mb-4">Holdings</h3>
                 
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -210,7 +226,7 @@ export default function DashboardPage() {
                       <tr className="border-b border-gray-700 text-left">
                         <th className="pb-3 px-4">Symbol</th>
                         <th className="pb-3 px-4">Company</th>
-                        {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                        {activeStrategy === "duan-yongping" && (
                           <>
                             <th className="pb-3 px-4 text-right">Buy Date</th>
                             <th className="pb-3 px-4 text-right">Buy Price</th>
@@ -218,12 +234,10 @@ export default function DashboardPage() {
                         )}
                         <th className="pb-3 px-4 text-right">Current Price</th>
                         <th className="pb-3 px-4 text-right">Weight</th>
-                        {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                        {activeStrategy === "duan-yongping" && (
                           <>
                             <th className="pb-3 px-4 text-right">Return</th>
-                            {(activeStrategy === "warren-buffett" || activeStrategy === "duan-yongping") && (
-                              <th className="pb-3 px-4 text-right">Multiple</th>
-                            )}
+                            <th className="pb-3 px-4 text-right">Multiple</th>
                             <th className="pb-3 px-4 text-right">Years</th>
                           </>
                         )}
@@ -244,7 +258,7 @@ export default function DashboardPage() {
                           </td>
                           <td className="py-4 px-4 text-gray-300">{stock.name}</td>
                           
-                          {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                          {activeStrategy === "duan-yongping" && (
                             <>
                               <td className="py-4 px-4 text-right text-gray-400 text-sm">
                                 {stock.buy_date}
@@ -265,7 +279,7 @@ export default function DashboardPage() {
                             </span>
                           </td>
                           
-                          {(activeStrategy === "warren-buffett" || activeStrategy === "li-lu" || activeStrategy === "duan-yongping") && (
+                          {activeStrategy === "duan-yongping" && (
                             <>
                               <td className="py-4 px-4 text-right">
                                 <span className={stock.return_pct && stock.return_pct > 0 ? "text-green-400" : "text-red-400"}>
@@ -273,11 +287,9 @@ export default function DashboardPage() {
                                 </span>
                               </td>
                               
-                              {(activeStrategy === "warren-buffett" || activeStrategy === "duan-yongping") && (
-                                <td className="py-4 px-4 text-right font-semibold text-green-400">
-                                  {stock.multiple?.toFixed(1)}x
-                                </td>
-                              )}
+                              <td className="py-4 px-4 text-right font-semibold text-green-400">
+                                {stock.multiple?.toFixed(1)}x
+                              </td>
                               
                               <td className="py-4 px-4 text-right text-gray-400 text-sm">
                                 {stock.holding_period_years?.toFixed(1)}
@@ -292,8 +304,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Best Performer Card (for Li Lu & Duan Yongping) */}
-            {portfolio.best_performer && (
+            {/* Best Performer Card (for Duan Yongping only, Buffett/Li Lu shown in toggle) */}
+            {portfolio.best_performer && activeStrategy === "duan-yongping" && (
               <div className="mt-6 bg-gradient-to-r from-green-900 to-green-800 rounded-xl p-6 border border-green-700">
                 <h3 className="text-xl font-semibold mb-2">🏆 Best Performer</h3>
                 <p className="text-2xl font-bold">
@@ -301,6 +313,8 @@ export default function DashboardPage() {
                   ({portfolio.best_performer.multiple.toFixed(1)}x)
                 </p>
               </div>
+            )}
+              </>
             )}
           </>
         )}

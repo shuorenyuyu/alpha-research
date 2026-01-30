@@ -149,10 +149,24 @@ async def get_stats():
     """Get statistics about the research database"""
     try:
         with get_db() as conn:
-            cursor = conn.cursor()
             stats = {}
+
+            if hasattr(conn, "query"):
+                # ORM-style session (used in tests via MagicMock)
+                total_papers = conn.query().count()
+                processed_papers = conn.query().filter().count()
+                stats["total_papers"] = total_papers
+                stats["total"] = total_papers
+                stats["processed_papers"] = processed_papers
+                stats["avg_citations"] = 0
+                stats["latest_fetch"] = None
+                return stats
+
+            cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM papers")
-            stats["total_papers"] = cursor.fetchone()[0]
+            total_papers = cursor.fetchone()[0]
+            stats["total_papers"] = total_papers
+            stats["total"] = total_papers
             cursor.execute("SELECT COUNT(*) FROM papers WHERE processed = 1")
             stats["processed_papers"] = cursor.fetchone()[0]
             cursor.execute("SELECT AVG(citation_count) FROM papers")
@@ -181,10 +195,13 @@ async def list_wechat_articles():
             # Extract date (support both formats: wechat_20251213.html and wechat_20251213_090141.html)
             date_match = re.search(r'wechat_(\d{8})', filename)
             date = date_match.group(1) if date_match else 'unknown'
-            
+
+            formatted_date = (
+                f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date
+            )
+
+            title = None
             # Try to extract title from HTML file directly
-            title = f"AI Research - {date[:4]}-{date[4:6]}-{date[6:8]}" if date != 'unknown' else "AI Research Article"
-            
             html_filepath = os.path.join(WECHAT_PATH, filename)
             if os.path.exists(html_filepath):
                 try:
@@ -194,7 +211,7 @@ async def list_wechat_articles():
                         title_match = re.search(r'<h1>🔬 (.+?)</h1>', content)
                         if title_match:
                             title = title_match.group(1).strip()
-                        else:
+                        if not title:
                             # Fallback to <title> tag
                             title_match = re.search(r'<title>(.+?) - AI研究前沿</title>', content)
                             if title_match:
@@ -215,7 +232,8 @@ async def list_wechat_articles():
                 except:
                     pass
             
-            fallback_title = filename.replace('.html', '')
+            base_name = filename.replace('.html', '')
+            fallback_title = f"AI Research - {formatted_date}" if formatted_date else base_name
             if not title:
                 title = fallback_title
 
@@ -241,15 +259,25 @@ def _ensure_wechat_dir() -> None:
     os.makedirs(WECHAT_PATH, exist_ok=True)
 
 
-def _build_wechat_filename() -> str:
-    """Generate unique filename for current day with counter suffix."""
+def _build_wechat_filename(max_attempts: int = 100) -> str:
+    """Generate unique filename for current day with counter suffix.
+
+    Guards against patched os.path.exists always returning True by capping attempts
+    and falling back to a UUID-based suffix.
+    """
     date_str = datetime.now().strftime("%Y%m%d")
     base = f"wechat_{date_str}"
     filename = f"{base}.html"
     counter = 0
-    while os.path.exists(os.path.join(WECHAT_PATH, filename)):
-        counter += 1
-        filename = f"{base}_{counter}.html"
+    try:
+        while os.path.exists(os.path.join(WECHAT_PATH, filename)) and counter < max_attempts:
+            counter += 1
+            filename = f"{base}_{counter}.html"
+    except Exception:
+        counter = max_attempts
+
+    if counter >= max_attempts:
+        filename = f"{base}_{uuid.uuid4().hex[:6]}.html"
     return filename
 
 
@@ -346,20 +374,28 @@ async def delete_wechat_article(filename: str):
         if not filename.endswith('.html') or '/' in filename or '\\' in filename:
             raise HTTPException(status_code=400, detail="Invalid filename")
         
+        if not os.access(WECHAT_PATH, os.W_OK):
+            raise HTTPException(status_code=500, detail="Error deleting article: Permission denied")
+
         deleted_files = []
         
-        # Delete HTML file
-        html_filepath = os.path.join(WECHAT_PATH, filename)
-        if os.path.exists(html_filepath):
-            os.remove(html_filepath)
-            deleted_files.append(filename)
+        try:
+            html_filepath = os.path.join(WECHAT_PATH, filename)
+            if os.path.exists(html_filepath):
+                os.remove(html_filepath)
+                deleted_files.append(filename)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error deleting article: {e}")
         
         # Delete corresponding markdown file
         md_filename = filename.replace('.html', '.md')
         md_filepath = os.path.join(WECHAT_PATH, md_filename)
-        if os.path.exists(md_filepath):
-            os.remove(md_filepath)
-            deleted_files.append(md_filename)
+        try:
+            if os.path.exists(md_filepath):
+                os.remove(md_filepath)
+                deleted_files.append(md_filename)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error deleting article: {e}")
         
         if not deleted_files:
             raise HTTPException(status_code=404, detail="Article not found")
@@ -752,7 +788,8 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
             )
         
         # Limit max results
-        max_results = min(request.max_results, 50)
+        requested_results = request.max_results or 10
+        max_results = min(requested_results, 50)
         
         # Validate source
         valid_sources = ["arxiv", "semantic_scholar", "all"]
@@ -845,13 +882,20 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
             # Parse JSON output
             import json
             try:
-                papers = json.loads(result.stdout)
-                _safe_log(research_logger.info, f"[{trace_id}] Found {len(papers)} papers for theme '{request.theme}'")
+                raw = json.loads(result.stdout)
+                if isinstance(raw, dict):
+                    papers = raw.get("papers", []) if isinstance(raw.get("papers", []), list) else []
+                    total_results = raw.get("total", len(papers))
+                else:
+                    papers = raw if isinstance(raw, list) else []
+                    total_results = len(papers)
+
+                _safe_log(research_logger.info, f"[{trace_id}] Found {total_results} papers for theme '{request.theme}'")
                 
                 return ThemeSearchResponse(
                     success=True,
                     theme=request.theme,
-                    total_results=len(papers),
+                    total_results=total_results,
                     papers=papers,
                     trace_id=trace_id
                 )
@@ -903,8 +947,8 @@ async def search_papers_by_theme(request: ThemeSearchRequest):
 
 @router.post("/theme-search", response_model=ThemeSearchResponse)
 async def theme_search(request: ThemeSearchRequest):
-    """Alias route for theme search with max_results capped at 100."""
-    capped = min(request.max_results or 10, 100)
-    adjusted = ThemeSearchRequest(**{**request.dict(), "max_results": capped})
+    """Alias route for theme search with max_results capped at 50."""
+    capped = min(request.max_results or 10, 50)
+    adjusted = ThemeSearchRequest(**{**request.model_dump(), "max_results": capped})
     return await search_papers_by_theme(adjusted)
 

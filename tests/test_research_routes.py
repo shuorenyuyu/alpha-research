@@ -71,6 +71,18 @@ class TestResearchRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data['articles'] == []
+
+    def test_list_wechat_articles_title_from_html(self, client):
+        """Test title extraction from HTML <h1> tag"""
+        html_content = '<html><head></head><body><h1>🔬 Fancy Title</h1></body></html>'
+        self.create_test_article('wechat_20240101.html', html_content)
+        self.create_test_article('wechat_20240101.md', '# Placeholder')
+
+        response = client.get('/api/research/wechat/list')
+
+        assert response.status_code == 200
+        titles = [a['title'] for a in response.json()['articles']]
+        assert any('Fancy Title' in t for t in titles)
     
     def test_get_wechat_article_success(self, client, sample_article_content):
         """Test successful article retrieval"""
@@ -129,6 +141,23 @@ class TestResearchRoutes:
             
             assert response.status_code == 500
             assert 'Error deleting article' in response.json()['detail']
+
+    def test_delete_wechat_article_permission_denied(self, client):
+        """Test delete permission denied path"""
+        with patch('api.routes.research.os.access', return_value=False):
+            response = client.delete('/api/research/wechat/wechat_20231211.html')
+
+        assert response.status_code == 500
+
+    def test_delete_wechat_article_markdown_only(self, client, sample_article_content):
+        """Ensure markdown-only files delete successfully"""
+        self.create_test_article('wechat_20231211.md', sample_article_content)
+
+        response = client.delete('/api/research/wechat/wechat_20231211.html')
+
+        assert response.status_code == 200
+        assert response.json()['success'] is True
+        assert not os.path.exists(os.path.join(self.temp_dir, 'wechat_20231211.md'))
     
     def test_get_wechat_article_html_fallback(self, client):
         """Test fallback to HTML when markdown doesn't exist"""
@@ -181,6 +210,19 @@ class TestResearchRoutes:
         response = client.post('/api/research/wechat/create', json=article_data)
         
         assert response.status_code == 422
+
+    def test_create_wechat_article_write_error(self, client):
+        """Test creation failure when file write fails"""
+        article_data = {
+            'title': 'Test Research Paper',
+            'content': 'This is test content'
+        }
+
+        with patch('api.routes.research._write_article_files', side_effect=IOError("disk full")):
+            response = client.post('/api/research/wechat/create', json=article_data)
+
+        assert response.status_code == 500
+        assert 'Error creating article' in response.json()['detail']
     
     def test_generate_research_paper_success(self, client):
         """Test successful research paper generation"""
@@ -218,6 +260,58 @@ class TestResearchRoutes:
         assert response.status_code == 200
         data = response.json()
         assert 'trace_id' in data
+
+    def test_build_wechat_filename_collision_fallback(self):
+        """Filename generator should fall back after repeated collisions"""
+        import api.routes.research as research_module
+
+        with patch('api.routes.research.os.path.exists', return_value=True):
+            filename = research_module._build_wechat_filename(max_attempts=3)
+
+        assert filename.startswith('wechat_')
+        assert filename.endswith('.html')
+        assert '_' in filename  # uuid suffix added
+
+    def test_build_wechat_filename_exception_handling(self):
+        """Filename generation handles os errors gracefully"""
+        import api.routes.research as research_module
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("fs error")
+
+        with patch('api.routes.research.os.path.exists', side_effect=boom):
+            filename = research_module._build_wechat_filename(max_attempts=2)
+
+        assert filename.endswith('.html')
+        assert '_' in filename
+
+    def test_safe_log_handles_errors(self):
+        """_safe_log should swallow logger failures"""
+        import api.routes.research as research_module
+
+        def broken_logger(*args, **kwargs):
+            raise RuntimeError("logger broken")
+
+        # Should not raise
+        research_module._safe_log(broken_logger, "message")
+
+    def test_get_wechat_article_injects_dark_theme(self, client):
+        """Ensure CSS injection occurs when </head> present"""
+        html_content = '<html><head><title>Test</title></head><body>ok</body></html>'
+        self.create_test_article('wechat_20240102.html', html_content)
+
+        response = client.get('/api/research/wechat/wechat_20240102.html')
+
+        assert response.status_code == 200
+        assert '</style>' in response.text
+
+    def test_get_logs_read_failure_path(self, client):
+        """Force log reader to hit exception block"""
+        with patch('api.routes.research.os.path.exists', return_value=True), \
+             patch('api.routes.research.os.path.getsize', side_effect=RuntimeError("bad stat")):
+            response = client.get('/api/research/logs/api')
+
+        assert response.status_code == 500
     
     def test_generate_research_paper_unexpected_error(self, client):
         """Test handling of unexpected errors"""

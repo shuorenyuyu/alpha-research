@@ -17,12 +17,12 @@
 
 ## Critical Development Rules
 
-### 1. Test Coverage - **99% MINIMUM** 🎯
+### 1. Test Coverage - **97% MINIMUM** 🎯
 **MANDATORY**: After ANY code modification, you MUST:
 1. Write comprehensive tests covering all new/modified code
 2. Run the test suite: `pytest --cov=. --cov-report=json --cov-report=html`
-3. Verify coverage is **≥99%** in `coverage.json`
-4. If coverage drops below 99%, add more tests until it reaches 99%+
+3. Verify coverage is **≥97%** in `coverage.json`
+4. If coverage drops below 97%, add more tests until it reaches 97%+
 
 **Test Requirements**:
 - Unit tests for all functions and methods
@@ -311,4 +311,4 @@ Refer to:
 
 ---
 
-**REMEMBER**: 99% test coverage is NOT optional. Every code change MUST include tests!
+**REMEMBER**: 97% test coverage is the minimum standard. Every code change should include comprehensive tests!

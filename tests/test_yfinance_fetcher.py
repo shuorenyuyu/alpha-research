@@ -266,3 +266,20 @@ class TestMarketDataFetcher:
             metrics = fetcher.get_metrics('bad')
 
         assert metrics is None
+
+    def test_extract_ebitda_skips_invalid_entries(self):
+        """Ensure EBITDA parsing skips non-numeric and NaN values"""
+        df = pd.DataFrame({
+            '2020': ['oops'],
+            '2021': [float('nan')],
+            '2022': [500.0],
+        }, index=['EBITDA'])
+
+        mock_ticker = Mock()
+        mock_ticker.get_income_stmt = Mock(return_value=df)
+
+        with patch('yfinance.Ticker', return_value=mock_ticker):
+            fetcher = MarketDataFetcher()
+            values = fetcher._extract_ebitda_series(mock_ticker)
+
+        assert values == [500.0]

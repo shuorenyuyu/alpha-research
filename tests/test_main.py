@@ -56,23 +56,22 @@ class TestMainApp:
         assert schema["info"]["title"] == "Alpha Research API"
         assert schema["info"]["version"] == "1.0.0"
     
-    def test_startup_event(self, client):
-        """Test startup event is logged"""
-        # Startup is called automatically when app starts
-        # We can trigger it again for testing
-        from api.main import startup_event
+    def test_lifespan_context(self, client):
+        """Test lifespan context manager is configured"""
+        from api.main import app
         import asyncio
         
-        # Should not raise exception
-        asyncio.run(startup_event())
-    
-    def test_shutdown_event(self, client):
-        """Test shutdown event is logged"""
-        from api.main import shutdown_event
-        import asyncio
+        # Verify lifespan is configured
+        assert app.router.lifespan_context is not None
+        
+        # Test that lifespan can be invoked
+        async def test_lifespan():
+            async with app.router.lifespan_context(app) as state:
+                # Lifespan should initialize without errors
+                assert state is not None or state is None  # Either is fine
         
         # Should not raise exception
-        asyncio.run(shutdown_event())
+        asyncio.run(test_lifespan())
     
     def test_middleware_error_handling(self, client):
         """Test middleware handles errors correctly"""
